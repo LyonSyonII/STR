@@ -12,3 +12,13 @@ Quina senyal li ha de donar els interruptors és una tasca (PID).
 Farem passar la interrupció pel FreeRTOS.
 
 ## PID
+ref = alternant entre -90 i 90 cada segon
+error = ref - angleMesurat
+P = Kp * error
+I += Ki * Tpid * error
+D = Kd * (error - last_error) / Tpid
+
+u = P + I + D
+
+Signe => Direccio
+Modul => PWM
