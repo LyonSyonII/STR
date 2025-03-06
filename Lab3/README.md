@@ -23,4 +23,12 @@ u = P + I + D
 Signe => Direccio
 Modul => PWM
 
+## Tasques
+- Step 3 Llegir valor de l'encoder
+- Step 4 Plot data
+- Step 5.a Moure motor
+- Step 5.b Canviar valor de referencia cada segon (+90 a -90)
+
+
+
 # TENIM ASSIGNAT EL MOTOR 2

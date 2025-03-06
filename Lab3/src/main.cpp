@@ -5,6 +5,12 @@
 
 // circular buffer for debugging
 #define BUFF_SIZE 250
+
+const byte DIR_A = 12;
+const byte PWM_A = 3;
+const byte HALL_A = 18;
+const byte HALL_B = 19;
+
 float t[BUFF_SIZE] = {};
 byte circ_buffer1[BUFF_SIZE] = {};
 byte circ_buffer2[BUFF_SIZE] = {};
@@ -36,7 +42,7 @@ TickType_t xLastWakeTime5;
 TickType_t xLastWakeTime6;
 
 // Function prototypes
-void Task1LED(void *pvParameters);
+void Task1MoveMotor(void *pvParameters);
 void Task2PID(void *pvParameters);
 void Task3(void *pvParameters);
 void Task4(void *pvParameters);
@@ -50,11 +56,19 @@ float str_getTime(void);
 void setup() {
   Serial.begin(115200);
 
-  xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(10000), pdFALSE, 0,
-                               OneShotTimerCallback);
+  pinMode(PWM_A, OUTPUT); // rotation speed (pwm)
+  pinMode(DIR_A, OUTPUT); // direction ()
+  pinMode(HALL_A, INPUT_PULLUP); // pin hall effect
+  pinMode(HALL_B, INPUT_PULLUP); // pin hall effect 2
+
+
+  // fer vTaskResume des de interrupcio ISR per tal de cridar la nostra tasca
+  // Per tant, la tasca de llegir es aperiodica (pero tant petita que no importa) 
+
+  // xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(10000), pdFALSE, 0, OneShotTimerCallback);
   // xOneShotStarted = xTimerStart(xOneShotTimer, 0);
 
-  xTaskCreate(Task1LED, "Task1LED", configMINIMAL_STACK_SIZE, NULL, 8, &Task1Handle);
+  xTaskCreate(Task1MoveMotor, "Task1MoveMotor", configMINIMAL_STACK_SIZE, NULL, 8, &Task1Handle);
   xTaskCreate(Task2PID, "Task2PID", configMINIMAL_STACK_SIZE, NULL, 6, &Task2Handle);
   xTaskCreate(Task3, "Task3", configMINIMAL_STACK_SIZE, NULL, 7, &Task3Handle);
   xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE, NULL, 5, &Task4Handle);
@@ -68,19 +82,34 @@ void setup() {
   xLastWakeTime4 = xLastWakeTime1;
   xLastWakeTime5 = xLastWakeTime1;
   xLastWakeTime6 = xLastWakeTime1;
-
+  
   // vTaskStartScheduler(); //Most ports require calling this to start the
   // kernel
 }
 
 void loop() {}
 
-void Task1LED(void *pvParameters) {
-  pinMode(LED_BUILTIN, OUTPUT);
+void Task1MoveMotor(void *pvParameters) {
+  uint16_t newAngle = 0;
+  digitalWrite(DIR_A, digitalRead(DIR_A) ^ 1);
   for (;;) {
-    digitalWrite(LED_BUILTIN, digitalRead(LED_BUILTIN) ^ 1);
-    str_compute(10);
-    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(50));
+    // newAngle = (newAngle + 1) % 360;
+    // analogWrite(PWM_A, 0);
+    // digitalWrite(LED_BUILTIN, digitalRead(LED_BUILTIN) ^ 1);
+    // str_compute(10);
+    analogWrite(PWM_A, 90);
+    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
+    
+    analogWrite(PWM_A, 0);
+    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(2000));
+
+    // vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
+    // analogWrite(PWM_A, 180);
+
+    // vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
+    // analogWrite(PWM_A, 270);
+    // vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
+    // analogWrite(PWM_A, 90);
   }
 }
 
