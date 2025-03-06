@@ -36,12 +36,12 @@ TickType_t xLastWakeTime5;
 TickType_t xLastWakeTime6;
 
 // Function prototypes
-void Task1(void *pvParameters);
-void Task2(void *pvParameters);
+void Task1LED(void *pvParameters);
+void Task2PID(void *pvParameters);
 void Task3(void *pvParameters);
 void Task4(void *pvParameters);
 void Task5(void *pvParameters);
-void Task6(void *pvParameters);
+void Task6Trace(void *pvParameters);
 void OneShotTimerCallback(TimerHandle_t xTimer);
 void str_trace(void);
 void str_compute(unsigned int);
@@ -52,14 +52,14 @@ void setup() {
 
   xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(10000), pdFALSE, 0,
                                OneShotTimerCallback);
-  xOneShotStarted = xTimerStart(xOneShotTimer, 0);
+  // xOneShotStarted = xTimerStart(xOneShotTimer, 0);
 
-  xTaskCreate(Task1, "Task1", configMINIMAL_STACK_SIZE, NULL, 8, &Task1Handle);
-  xTaskCreate(Task2, "Task2", configMINIMAL_STACK_SIZE, NULL, 6, &Task2Handle);
+  xTaskCreate(Task1LED, "Task1LED", configMINIMAL_STACK_SIZE, NULL, 8, &Task1Handle);
+  xTaskCreate(Task2PID, "Task2PID", configMINIMAL_STACK_SIZE, NULL, 6, &Task2Handle);
   xTaskCreate(Task3, "Task3", configMINIMAL_STACK_SIZE, NULL, 7, &Task3Handle);
   xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE, NULL, 5, &Task4Handle);
   xTaskCreate(Task5, "Task5", configMINIMAL_STACK_SIZE, NULL, 4, &Task5Handle);
-  xTaskCreate(Task6, "Task6", configMINIMAL_STACK_SIZE, NULL, 3, &Task6Handle);
+  xTaskCreate(Task6Trace, "Task6Trace", configMINIMAL_STACK_SIZE, NULL, 3, &Task6Handle);
 
   // Initialise the xLastWakeTime variable with the current time.
   xLastWakeTime1 = 0;
@@ -75,7 +75,7 @@ void setup() {
 
 void loop() {}
 
-void Task1(void *pvParameters) {
+void Task1LED(void *pvParameters) {
   pinMode(LED_BUILTIN, OUTPUT);
   for (;;) {
     digitalWrite(LED_BUILTIN, digitalRead(LED_BUILTIN) ^ 1);
@@ -84,9 +84,35 @@ void Task1(void *pvParameters) {
   }
 }
 
-void Task2(void *pvParameters) {
+double PID(uint8_t ref, int16_t angleMesurat) {
+  const double Kp = 0;
+  const double Ki = 0;
+  const double Kd = 0;
+  const uint8_t Tpid = 0;
+  static int16_t lastError = 0;
+  static double I = 0;
+
+  int16_t error = ref - angleMesurat;
+  double P = Kp * error;
+  I += Ki * Tpid * error;
+  double D = Kd * (error - lastError) / Tpid;
+  return P + I + D; 
+}
+void Task2PID(void *pvParameters) {
+  // ref = alternant entre -90 i 90 cada segon
+  // error = ref - angleMesurat
+  // P = Kp * error
+  // I += Ki * Tpid * error
+  // D = Kd * (error - last_error) / Tpid
+
+  // u = P + I + D
+
+  // Signe => Direccio
+  // Modul => PWM
+
   for (;;) {
-    str_compute(15);
+    // str_compute(15);
+    PID(0, 0);
     vTaskDelayUntil(&xLastWakeTime2, pdMS_TO_TICKS(100));
   }
 }
@@ -112,7 +138,7 @@ void Task5(void *pvParameters) {
   }
 }
 
-void Task6(void *pvParameters) {
+void Task6Trace(void *pvParameters) {
   pinMode(A1, INPUT);
   pinMode(A2, INPUT);
   pinMode(A3, INPUT);

@@ -22,3 +22,5 @@ u = P + I + D
 
 Signe => Direccio
 Modul => PWM
+
+# TENIM ASSIGNAT EL MOTOR 2
