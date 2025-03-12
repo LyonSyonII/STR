@@ -32,3 +32,6 @@ Modul => PWM
 
 
 # TENIM ASSIGNAT EL MOTOR 2
+
+Quan utilitzar xxxFromISR();
+
