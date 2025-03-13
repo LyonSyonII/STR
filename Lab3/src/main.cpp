@@ -41,8 +41,15 @@ TickType_t xLastWakeTime4;
 TickType_t xLastWakeTime5;
 TickType_t xLastWakeTime6;
 
+// Interrupt Globals
+uint16_t Task2HallCounter = 0;
+uint16_t Task2HallAngle = 0;
+float Task2HallDelta = 0;
+bool Task2HallIsClockwise = true;
+
 // Function prototypes
-void InterruptReadHall();
+void InterruptReadHallA();
+void InterruptReadHallB();
 void Task1MoveMotor(void *pvParameters);
 void Task2ReadHall(void *pvParameters);
 void Task3PID(void *pvParameters);
@@ -56,31 +63,34 @@ float str_getTime(void);
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("Pasta");
 
   pinMode(PWM_A, OUTPUT);         // rotation speed (pwm)
   pinMode(DIR_A, OUTPUT);         // direction ()
   pinMode(HALL_A, INPUT_PULLUP);  // pin hall effect
   pinMode(HALL_B, INPUT_PULLUP);  // pin hall effect 2
 
-  attachInterrupt(digitalPinToInterrupt(HALL_A), InterruptReadHall, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(HALL_B), InterruptReadHall, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(HALL_A), InterruptReadHallA, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(HALL_B), InterruptReadHallB, CHANGE);
 
   // fer vTaskResume des de interrupcio ISR per tal de cridar la nostra tasca
   // Per tant, la tasca de llegir es aperiodica (pero tant petita que no
   // importa)
 
-  // xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(10000), pdFALSE,
-  // 0, OneShotTimerCallback); xOneShotStarted = xTimerStart(xOneShotTimer, 0);
+  // xOneShotTimer = xTimerCreatne("OneShotTimer", pdMS_TO_TICKS(10000),
+  // pdFALSE, 0, OneShotTimerCallback); xOneShotStarted =
+  // xTimerStart(xOneShotTimer, 0);
 
   xTaskCreate(Task1MoveMotor, "Task1MoveMotor", configMINIMAL_STACK_SIZE, NULL,
               8, &Task1MoveMotorHandle);
-  xTaskCreate(Task2ReadHall, "Task2ReadHall", configMINIMAL_STACK_SIZE, NULL, 6,
+  xTaskCreate(Task2ReadHall, "Task2ReadHall", configMINIMAL_STACK_SIZE, NULL, 9,
               &Task2ReadHallHandle);
-  xTaskCreate(Task3PID, "Task3PID", configMINIMAL_STACK_SIZE, NULL, 7,
-              &Task3PIDHandle);
-  xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE, NULL, 5, &Task4Handle);
-  xTaskCreate(Task5, "Task5", configMINIMAL_STACK_SIZE, NULL, 4, &Task5Handle);
-  xTaskCreate(Task6Trace, "Task6Trace", configMINIMAL_STACK_SIZE, NULL, 3,
+  vTaskSuspend(Task2ReadHallHandle);
+  // xTaskCreate(Task3PID, "Task3PID", configMINIMAL_STACK_SIZE, NULL, 7,
+  // &Task3PIDHandle); xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE,
+  // NULL, 5, &Task4Handle); xTaskCreate(Task5, "Task5",
+  // configMINIMAL_STACK_SIZE, NULL, 4, &Task5Handle);
+  xTaskCreate(Task6Trace, "Task6Trace", configMINIMAL_STACK_SIZE, NULL, 7,
               &Task6Handle);
 
   // Initialise the xLastWakeTime variable with the current time.
@@ -100,13 +110,19 @@ void loop() {}
 void Task1MoveMotor(void *pvParameters) {
   uint16_t newAngle = 0;
   digitalWrite(DIR_A, digitalRead(DIR_A) ^ 1);
+  digitalWrite(DIR_A, 0);
   for (;;) {
     // newAngle = (newAngle + 1) % 360;
     // analogWrite(PWM_A, 0);
     // digitalWrite(LED_BUILTIN, digitalRead(LED_BUILTIN) ^ 1);
     // str_compute(10);
-    analogWrite(PWM_A, 90);
-    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
+    Task2HallCounter = 0;
+    analogWrite(PWM_A, 120);
+    while (Task2HallCounter * Task2HallDelta < 90) {
+      // vTaskDelay(pdMS_TO_TICKS(10));
+      taskYIELD();
+    }
+    // vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
 
     analogWrite(PWM_A, 0);
     vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(2000));
@@ -121,36 +137,39 @@ void Task1MoveMotor(void *pvParameters) {
   }
 }
 
-void InterruptReadHall() {
-  if (xTaskResumeFromISR(Task2ReadHallHandle)) {
-    taskYIELD();
+uint8_t Task2RunningPin = 0;
+void InterruptReadHallA() {
+  if (!Task2RunningPin && xTaskResumeFromISR(Task2ReadHallHandle)) {
+    Task2RunningPin = 1;
+    vPortYieldFromISR();
+  }
+}
+void InterruptReadHallB() {
+  if (!Task2RunningPin && xTaskResumeFromISR(Task2ReadHallHandle)) {
+    Task2RunningPin = 2;
+    vPortYieldFromISR();
   }
 }
 void Task2ReadHall(void *pvParameters) {
   const int channelPinA = HALL_A;
   const int channelPinB = HALL_B;
 
-  const int timeThreshold = 5;
-  long timeCounter = 0;
+  const uint16_t ppr = 7 * 2 * 2 * 50;
+  Task2HallDelta = 360.0 / ppr;  // 1400 is PPR
 
-  const int maxSteps = 255;
-  volatile int ISRCounter = 0;
-  int counter = 0;
-
-  bool IsCW = true;
   for (;;) {
-    // str_compute(4);
+    bool pinsEqual = digitalRead(channelPinA) == digitalRead(channelPinB);
 
-    if (millis() > timeCounter + timeThreshold) {
-      if (digitalRead(channelPinA) == digitalRead(channelPinB)) {
-        IsCW = true;
-        if (ISRCounter + 1 <= maxSteps) ISRCounter++;
-      } else {
-        IsCW = false;
-        if (ISRCounter - 1 > 0) ISRCounter--;
-      }
-      timeCounter = millis();
+    Task2HallIsClockwise =
+        Task2RunningPin == 1 && pinsEqual || Task2RunningPin == 2 && !pinsEqual;
+    if (Task2HallIsClockwise) {
+      Task2HallCounter += 1;
+    } else {
+      Task2HallCounter -= 1;
     }
+
+    Task2RunningPin = 0;
+    vTaskSuspend(Task2ReadHallHandle);
   }
 }
 
@@ -158,7 +177,7 @@ double PID(uint8_t ref, int16_t angleMesurat) {
   const double Kp = 0;
   const double Ki = 0;
   const double Kd = 0;
-  const uint8_t Tpid = 0;
+  const uint8_t Tpid = 1;
   static int16_t lastError = 0;
   static double I = 0;
 
@@ -209,6 +228,13 @@ void Task6Trace(void *pvParameters) {
   pinMode(A5, INPUT);
 
   for (;;) {
+    Serial.print("Task2HallCounter: ");
+    Serial.println(Task2HallCounter);
+    Serial.print("Task2HallAngle: ");
+    Serial.println(Task2HallCounter * Task2HallDelta);
+    Serial.print("Clockwise: ");
+    Serial.println(Task2HallIsClockwise ? "True" : "False");
+
     int adcA1 = analogRead(A1);
     int adcA2 = analogRead(A2);
     int adcA3 = analogRead(A3);
