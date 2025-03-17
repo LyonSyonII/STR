@@ -8,14 +8,14 @@
 /*******************/
 
 // Controls the motor direction
-const unsigned int DIR_A = 12;
+const unsigned short int DIR_A = 12;
 
 // Controls the speed of the motor
-const unsigned int PWM_A = 3;
+const unsigned short int PWM_A = 3;
 
 // Hall effect sensors
-const unsigned int HALL_A = 18;
-const unsigned int HALL_B = 19;
+const unsigned short int HALL_A = 18;
+const unsigned short int HALL_B = 19;
 
 /******************/
 /* TASK VARIABLES */
@@ -32,9 +32,9 @@ int Task2HallCounter = 0;
 /*******************/
 
 // Make sure to the speed is always between 75 and 254
-unsigned int motor_speed = 120;
+unsigned short int motor_speed = 120;
 
-unsigned char is_motor_clockwise = true;
+unsigned bool is_motor_clockwise = true;
 
 int motor_angle = 0;
 
