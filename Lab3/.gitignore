@@ -4,3 +4,10 @@
 .vscode/launch.json
 .vscode/ipch
 .direnv
+.venv/
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.env
+.logs/
+*.log

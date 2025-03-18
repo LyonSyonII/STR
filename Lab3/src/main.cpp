@@ -1,15 +1,11 @@
 #include <Arduino.h>
 
 #include "Arduino_FreeRTOS.h"
+#include "config/config.hh"
 #include "timers.h"
 
 // circular buffer for debugging
 #define BUFF_SIZE 250
-
-const byte DIR_A = 12;
-const byte PWM_A = 3;
-const byte HALL_A = 18;
-const byte HALL_B = 19;
 
 float t[BUFF_SIZE] = {};
 byte circ_buffer1[BUFF_SIZE] = {};
@@ -41,12 +37,6 @@ TickType_t xLastWakeTime4;
 TickType_t xLastWakeTime5;
 TickType_t xLastWakeTime6;
 
-// Interrupt Globals
-uint16_t Task2HallCounter = 0;
-uint16_t Task2HallAngle = 0;
-float Task2HallDelta = 0;
-bool Task2HallIsClockwise = true;
-
 // Function prototypes
 void InterruptReadHallA();
 void InterruptReadHallB();
@@ -63,7 +53,6 @@ float str_getTime(void);
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("Pasta");
 
   pinMode(PWM_A, OUTPUT);         // rotation speed (pwm)
   pinMode(DIR_A, OUTPUT);         // direction ()
@@ -77,21 +66,15 @@ void setup() {
   // Per tant, la tasca de llegir es aperiodica (pero tant petita que no
   // importa)
 
-  // xOneShotTimer = xTimerCreatne("OneShotTimer", pdMS_TO_TICKS(10000),
-  // pdFALSE, 0, OneShotTimerCallback); xOneShotStarted =
-  // xTimerStart(xOneShotTimer, 0);
+  xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(execution_time), pdFALSE, 0, OneShotTimerCallback);
+  xOneShotStarted = xTimerStart(xOneShotTimer, 0);
 
-  xTaskCreate(Task1MoveMotor, "Task1MoveMotor", configMINIMAL_STACK_SIZE, NULL,
-              8, &Task1MoveMotorHandle);
-  xTaskCreate(Task2ReadHall, "Task2ReadHall", configMINIMAL_STACK_SIZE, NULL, 9,
-              &Task2ReadHallHandle);
-  vTaskSuspend(Task2ReadHallHandle);
-  // xTaskCreate(Task3PID, "Task3PID", configMINIMAL_STACK_SIZE, NULL, 7,
-  // &Task3PIDHandle); xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE,
-  // NULL, 5, &Task4Handle); xTaskCreate(Task5, "Task5",
-  // configMINIMAL_STACK_SIZE, NULL, 4, &Task5Handle);
-  xTaskCreate(Task6Trace, "Task6Trace", configMINIMAL_STACK_SIZE, NULL, 7,
-              &Task6Handle);
+  xTaskCreate(Task1MoveMotor, "Task1MoveMotor", configMINIMAL_STACK_SIZE, NULL, 8, &Task1MoveMotorHandle);
+  xTaskCreate(Task2ReadHall, "Task2ReadHall", configMINIMAL_STACK_SIZE, NULL, 9, &Task2ReadHallHandle);
+  // xTaskCreate(Task3PID, "Task3PID", configMINIMAL_STACK_SIZE, NULL, 7, &Task3PIDHandle);
+  // xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE, NULL, 5, &Task4Handle);
+  // xTaskCreate(Task5, "Task5", configMINIMAL_STACK_SIZE, NULL, 4, &Task5Handle);
+  xTaskCreate(Task6Trace, "Task6Trace", configMINIMAL_STACK_SIZE, NULL, 7, &Task6Handle);
 
   // Initialise the xLastWakeTime variable with the current time.
   xLastWakeTime1 = 0;
@@ -101,74 +84,64 @@ void setup() {
   xLastWakeTime5 = xLastWakeTime1;
   xLastWakeTime6 = xLastWakeTime1;
 
-  // vTaskStartScheduler(); //Most ports require calling this to start the
-  // kernel
+  // This task is waken by hardware interrupts
+  vTaskSuspend(Task2ReadHallHandle);
+
+  // vTaskStartScheduler(); //Most ports require calling this to start the kernel
 }
 
 void loop() {}
 
 void Task1MoveMotor(void *pvParameters) {
-  uint16_t newAngle = 0;
-  digitalWrite(DIR_A, digitalRead(DIR_A) ^ 1);
-  digitalWrite(DIR_A, 0);
   for (;;) {
-    // newAngle = (newAngle + 1) % 360;
-    // analogWrite(PWM_A, 0);
-    // digitalWrite(LED_BUILTIN, digitalRead(LED_BUILTIN) ^ 1);
-    // str_compute(10);
     Task2HallCounter = 0;
-    analogWrite(PWM_A, 120);
-    while (Task2HallCounter * Task2HallDelta < 90) {
-      // vTaskDelay(pdMS_TO_TICKS(10));
+
+    digitalWrite(DIR_A, !digitalRead(DIR_A));
+
+    analogWrite(PWM_A, motor_speed);
+
+    while (abs(Task2HallCounter * hall_delta) < movement_angle) {
       taskYIELD();
     }
-    // vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
 
     analogWrite(PWM_A, 0);
-    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(2000));
 
-    // vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
-    // analogWrite(PWM_A, 180);
-
-    // vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
-    // analogWrite(PWM_A, 270);
-    // vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(500));
-    // analogWrite(PWM_A, 90);
+    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(1000));
   }
 }
 
-uint8_t Task2RunningPin = 0;
 void InterruptReadHallA() {
   if (!Task2RunningPin && xTaskResumeFromISR(Task2ReadHallHandle)) {
     Task2RunningPin = 1;
     vPortYieldFromISR();
   }
 }
+
 void InterruptReadHallB() {
   if (!Task2RunningPin && xTaskResumeFromISR(Task2ReadHallHandle)) {
     Task2RunningPin = 2;
     vPortYieldFromISR();
   }
 }
+
 void Task2ReadHall(void *pvParameters) {
   const int channelPinA = HALL_A;
   const int channelPinB = HALL_B;
 
-  const uint16_t ppr = 7 * 2 * 2 * 50;
-  Task2HallDelta = 360.0 / ppr;  // 1400 is PPR
-
   for (;;) {
-    bool pinsEqual = digitalRead(channelPinA) == digitalRead(channelPinB);
+    bool arePinsEqual = digitalRead(channelPinA) == digitalRead(channelPinB);
 
-    Task2HallIsClockwise =
-        Task2RunningPin == 1 && pinsEqual || Task2RunningPin == 2 && !pinsEqual;
-    if (Task2HallIsClockwise) {
-      Task2HallCounter += 1;
+    is_motor_clockwise =
+        ((Task2RunningPin == 1) && arePinsEqual) || ((Task2RunningPin == 2) && !arePinsEqual);
+
+    if (is_motor_clockwise) {
+      ++Task2HallCounter;
     } else {
-      Task2HallCounter -= 1;
+      --Task2HallCounter;
     }
 
     Task2RunningPin = 0;
+
     vTaskSuspend(Task2ReadHallHandle);
   }
 }
@@ -200,22 +173,31 @@ void Task3PID(void *pvParameters) {
   // Modul => PWM
 
   for (;;) {
-    // str_compute(15);
-    PID(0, 0);
+    // TODO: Implement PID control
+
+    // const double target_angle = is_motor_clockwise ? movement_angle : -movement_angle;
+    // const double correction = PID(target_angle, motor_angle);
+
+    // if (correction > 0) {
+    //   is_motor_clockwise = true;
+    //   analogWrite(PWM_A, correction);
+    // } else {
+    //   is_motor_clockwise = false;
+    //   analogWrite(PWM_A, -correction);
+    // }
+
     vTaskDelayUntil(&xLastWakeTime2, pdMS_TO_TICKS(100));
   }
 }
 
 void Task4(void *pvParameters) {
   for (;;) {
-    str_compute(6);
     vTaskDelayUntil(&xLastWakeTime4, pdMS_TO_TICKS(150));
   }
 }
 
 void Task5(void *pvParameters) {
   for (;;) {
-    str_compute(8);
     vTaskDelayUntil(&xLastWakeTime5, pdMS_TO_TICKS(100));
   }
 }
@@ -228,13 +210,6 @@ void Task6Trace(void *pvParameters) {
   pinMode(A5, INPUT);
 
   for (;;) {
-    Serial.print("Task2HallCounter: ");
-    Serial.println(Task2HallCounter);
-    Serial.print("Task2HallAngle: ");
-    Serial.println(Task2HallCounter * Task2HallDelta);
-    Serial.print("Clockwise: ");
-    Serial.println(Task2HallIsClockwise ? "True" : "False");
-
     int adcA1 = analogRead(A1);
     int adcA2 = analogRead(A2);
     int adcA3 = analogRead(A3);
@@ -251,9 +226,10 @@ void Task6Trace(void *pvParameters) {
     Serial.print(",");
     Serial.print(adcA5);
     Serial.println();
-    str_compute(54);
     vTaskDelayUntil(&xLastWakeTime6, pdMS_TO_TICKS(200));
   }
+
+  Serial.println("=== END ===");
 }
 
 void OneShotTimerCallback(TimerHandle_t xTimer) {
@@ -308,7 +284,11 @@ void str_trace(void) {
   debug_data1[circ_buffer_counter] = 2.7;
 }
 
-// str_compute(x) is only used to waste time without using delays
+/**
+ * @brief Compute a dummy operation. Done to simulate a task
+ *
+ * @param milliseconds Time to waste in milliseconds
+ */
 void str_compute(unsigned int milliseconds) {
   unsigned int i = 0;
   unsigned int imax = 0;
@@ -319,9 +299,12 @@ void str_compute(unsigned int milliseconds) {
   }
 }
 
+/**
+ * @brief Get the time since system start in milliseconds
+ *
+ * @return float
+ */
 float str_getTime(void) {
-  // float t=(float)(0.5e-3*((float)OCR1A*xTaskGetTickCount()+TCNT1));//Sent
-  // time in milliseconds!!!
   float t = 10.0 * (float)(xTaskGetTickCount()) + 0.0005 * (float)TCNT1;
   return t;
 }
