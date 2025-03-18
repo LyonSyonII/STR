@@ -1,6 +1,8 @@
 #ifndef CONFIG_HH
 #define CONFIG_HH
 
+#include <Arduino.h>
+
 /* NOTE: Types like uint8_t or similar are an alias for unsigned int or similar. */
 
 /*******************/
@@ -8,41 +10,41 @@
 /*******************/
 
 // Controls the motor direction
-const unsigned short int DIR_A = 12;
+const uint8_t DIR_A = 12;
 
 // Controls the speed of the motor
-const unsigned short int PWM_A = 3;
+const uint8_t PWM_A = 3;
 
 // Hall effect sensors
-const unsigned short int HALL_A = 18;
-const unsigned short int HALL_B = 19;
+const uint8_t HALL_A = 18;
+const uint8_t HALL_B = 19;
 
 /******************/
 /* TASK VARIABLES */
 /******************/
 
-unsigned int Task2RunningPin = 0;
+uint8_t Task2RunningPin = 0;
 
 // This must be a signed integer since the motor
 // must be able to rotate in both directions
-int Task2HallCounter = 0;
+int16_t Task2HallCounter = 0;
 
 /*******************/
 /* MOTOR VARIABLES */
 /*******************/
 
 // Make sure to the speed is always between 75 and 254
-unsigned short int motor_speed = 120;
+uint8_t motor_speed = 120;
 
-unsigned bool is_motor_clockwise = true;
+bool is_motor_clockwise = true;
 
-int motor_angle = 0;
+int8_t motor_angle = 0;
 
 // Target angle for each movement
-const unsigned int movement_angle = 90;
+const uint8_t movement_angle = 90;
 
 // Motor angle calculation variables
-const unsigned int ppr = 7 * 2 * 2 * 50;  // 1400
+const uint16_t ppr = 7 * 2 * 2 * 50;  // 1400
 const float hall_delta = 360.0f / ppr;
 
 /***********************/
@@ -51,6 +53,6 @@ const float hall_delta = 360.0f / ppr;
 
 // After the amount of time specified in executionTime (ms),
 // the program will go into a complete halt.
-const unsigned int execution_time = 30000;
+const uint16_t execution_time = 30000;
 
 #endif
