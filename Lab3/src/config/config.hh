@@ -41,10 +41,10 @@ bool is_motor_clockwise = true;
 int8_t motor_angle = 0;
 
 // Target angle for each movement
-const uint8_t movement_angle = 90;
+int8_t reference_angle = 90;
 
 // Motor angle calculation variables
-const uint16_t ppr = 7 * 2 * 2 * 50;  // 1400
+const int16_t ppr = 7 * 2 * 2 * 50;  // 1400
 const float hall_delta = 360.0f / ppr;
 
 /***********************/

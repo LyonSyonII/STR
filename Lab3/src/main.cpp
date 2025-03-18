@@ -1,3 +1,7 @@
+// build: C:\Users\ZIANG\.platformio\penv\Scripts\platformio.exe run
+// upload: C:\Users\ZIANG\.platformio\penv\Scripts\platformio.exe run --pwm upload
+// monitor: C:\Users\ZIANG\.platformio\penv\Scripts\platformio.exe device monitor
+
 #include <Arduino.h>
 
 #include "Arduino_FreeRTOS.h"
@@ -42,8 +46,9 @@ void InterruptReadHallA();
 void InterruptReadHallB();
 void Task1MoveMotor(void *pvParameters);
 void Task2ReadHall(void *pvParameters);
+double PID(int8_t ref, int16_t angleMesurat);
 void Task3PID(void *pvParameters);
-void Task4(void *pvParameters);
+void Task4UpdateRef(void *pvParameters);
 void Task5(void *pvParameters);
 void Task6Trace(void *pvParameters);
 void OneShotTimerCallback(TimerHandle_t xTimer);
@@ -72,7 +77,7 @@ void setup() {
   xTaskCreate(Task1MoveMotor, "Task1MoveMotor", configMINIMAL_STACK_SIZE, NULL, 8, &Task1MoveMotorHandle);
   xTaskCreate(Task2ReadHall, "Task2ReadHall", configMINIMAL_STACK_SIZE, NULL, 9, &Task2ReadHallHandle);
   // xTaskCreate(Task3PID, "Task3PID", configMINIMAL_STACK_SIZE, NULL, 7, &Task3PIDHandle);
-  // xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE, NULL, 5, &Task4Handle);
+  xTaskCreate(Task4UpdateRef, "Task4UpdateRef", configMINIMAL_STACK_SIZE, NULL, 5, &Task4Handle);
   // xTaskCreate(Task5, "Task5", configMINIMAL_STACK_SIZE, NULL, 4, &Task5Handle);
   xTaskCreate(Task6Trace, "Task6Trace", configMINIMAL_STACK_SIZE, NULL, 7, &Task6Handle);
 
@@ -94,19 +99,34 @@ void loop() {}
 
 void Task1MoveMotor(void *pvParameters) {
   for (;;) {
-    Task2HallCounter = 0;
+/*     Task2HallCounter = 0;
 
     digitalWrite(DIR_A, !digitalRead(DIR_A));
 
     analogWrite(PWM_A, motor_speed);
 
-    while (abs(Task2HallCounter * hall_delta) < movement_angle) {
+    while (abs(Task2HallCounter * hall_delta) < reference_angle) {
       taskYIELD();
     }
 
     analogWrite(PWM_A, 0);
 
-    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(1000));
+    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(1000)); */
+
+
+    int16_t angleMesurat = Task2HallCounter * hall_delta;
+    double pwm = PID(reference_angle, angleMesurat);
+    // Serial.print("Mesurat = "); Serial.println(angleMesurat);
+    // Serial.print("Reference = "); Serial.println(reference_angle);
+    // Serial.print("Target = "); Serial.println(pwm);
+
+    digitalWrite(DIR_A, pwm < 0 ? 1 : 0);
+    pwm = abs(pwm);
+    if (pwm > 254) pwm = 254;
+    else if (pwm < 74) pwm = 0;
+    // Serial.print("Clamped Target = "); Serial.println(pwm);
+    analogWrite(PWM_A, abs(pwm));
+    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(10));
   }
 }
 
@@ -134,10 +154,24 @@ void Task2ReadHall(void *pvParameters) {
     is_motor_clockwise =
         ((Task2RunningPin == 1) && arePinsEqual) || ((Task2RunningPin == 2) && !arePinsEqual);
 
+    // if (is_motor_clockwise) {
+    //   if (Task2HallCounter < ppr - 1) {
+    //     ++Task2HallCounter;
+    //   } else {
+    //     Task2HallCounter = 0;
+    //   }
+    // } else {
+    //   if (Task2HallCounter == 0) {
+    //     Task2HallCounter = ppr - 1;
+    //   } else {
+    //     --Task2HallCounter;
+    //   }
+    // }
+
     if (is_motor_clockwise) {
-      ++Task2HallCounter;
+      Task2HallCounter = (Task2HallCounter + 1) % ppr;
     } else {
-      --Task2HallCounter;
+      Task2HallCounter = (Task2HallCounter - 1) % ppr;
     }
 
     Task2RunningPin = 0;
@@ -146,11 +180,11 @@ void Task2ReadHall(void *pvParameters) {
   }
 }
 
-double PID(uint8_t ref, int16_t angleMesurat) {
-  const double Kp = 0;
-  const double Ki = 0;
-  const double Kd = 0;
-  const uint8_t Tpid = 1;
+double PID(int8_t ref, int16_t angleMesurat) {
+  const double Kp = 1;
+  const double Ki = 1;
+  const double Kd = 1;
+  const uint8_t Tpid = 10;
   static int16_t lastError = 0;
   static double I = 0;
 
@@ -175,7 +209,7 @@ void Task3PID(void *pvParameters) {
   for (;;) {
     // TODO: Implement PID control
 
-    // const double target_angle = is_motor_clockwise ? movement_angle : -movement_angle;
+    // const double target_angle = is_motor_clockwise ? reference_angle : -reference_angle;
     // const double correction = PID(target_angle, motor_angle);
 
     // if (correction > 0) {
@@ -186,13 +220,16 @@ void Task3PID(void *pvParameters) {
     //   analogWrite(PWM_A, -correction);
     // }
 
-    vTaskDelayUntil(&xLastWakeTime2, pdMS_TO_TICKS(100));
+
+
+    vTaskDelayUntil(&xLastWakeTime2, pdMS_TO_TICKS(5000));
   }
 }
 
-void Task4(void *pvParameters) {
+void Task4UpdateRef(void *pvParameters) {
   for (;;) {
-    vTaskDelayUntil(&xLastWakeTime4, pdMS_TO_TICKS(150));
+    reference_angle *= -1;
+    vTaskDelayUntil(&xLastWakeTime4, pdMS_TO_TICKS(5000));
   }
 }
 
