@@ -1,7 +1,3 @@
-// build: C:\Users\ZIANG\.platformio\penv\Scripts\platformio.exe run
-// upload: C:\Users\ZIANG\.platformio\penv\Scripts\platformio.exe run --pwm upload
-// monitor: C:\Users\ZIANG\.platformio\penv\Scripts\platformio.exe device monitor
-
 #include <Arduino.h>
 
 #include "Arduino_FreeRTOS.h"
@@ -58,6 +54,7 @@ float str_getTime(void);
 
 void setup() {
   Serial.begin(115200);
+  Serial.println("=== START ===");
 
   pinMode(PWM_A, OUTPUT);         // rotation speed (pwm)
   pinMode(DIR_A, OUTPUT);         // direction ()
@@ -99,21 +96,6 @@ void loop() {}
 
 void Task1MoveMotor(void *pvParameters) {
   for (;;) {
-/*     Task2HallCounter = 0;
-
-    digitalWrite(DIR_A, !digitalRead(DIR_A));
-
-    analogWrite(PWM_A, motor_speed);
-
-    while (abs(Task2HallCounter * hall_delta) < reference_angle) {
-      taskYIELD();
-    }
-
-    analogWrite(PWM_A, 0);
-
-    vTaskDelayUntil(&xLastWakeTime1, pdMS_TO_TICKS(1000)); */
-
-
     int16_t angleMesurat = Task2HallCounter * hall_delta;
     double pwm = PID(reference_angle, angleMesurat);
     // Serial.print("Mesurat = "); Serial.println(angleMesurat);
@@ -153,20 +135,6 @@ void Task2ReadHall(void *pvParameters) {
 
     is_motor_clockwise =
         ((Task2RunningPin == 1) && arePinsEqual) || ((Task2RunningPin == 2) && !arePinsEqual);
-
-    // if (is_motor_clockwise) {
-    //   if (Task2HallCounter < ppr - 1) {
-    //     ++Task2HallCounter;
-    //   } else {
-    //     Task2HallCounter = 0;
-    //   }
-    // } else {
-    //   if (Task2HallCounter == 0) {
-    //     Task2HallCounter = ppr - 1;
-    //   } else {
-    //     --Task2HallCounter;
-    //   }
-    // }
 
     if (is_motor_clockwise) {
       Task2HallCounter = (Task2HallCounter + 1) % ppr;
@@ -253,6 +221,8 @@ void Task6Trace(void *pvParameters) {
     int adcA4 = analogRead(A4);
     int adcA5 = analogRead(A5);
     Serial.println("OSC");
+    Serial.print(str_getTime());
+    Serial.print(",");
     Serial.print(adcA1);
     Serial.print(",");
     Serial.print(adcA2);
@@ -265,8 +235,6 @@ void Task6Trace(void *pvParameters) {
     Serial.println();
     vTaskDelayUntil(&xLastWakeTime6, pdMS_TO_TICKS(200));
   }
-
-  Serial.println("=== END ===");
 }
 
 void OneShotTimerCallback(TimerHandle_t xTimer) {
@@ -303,6 +271,9 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
     Serial.print((float)debug_data1[i]);
     Serial.println();
   }
+
+  analogWrite(PWM_A, 0);
+  Serial.println("=== END ===");
 }
 
 void str_trace(void) {
