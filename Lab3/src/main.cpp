@@ -87,8 +87,8 @@ void setup() {
 void loop() {}
 
 void Task1ReadHall(void *pvParameters) {
-  const int channelPinA = HALL_A;
-  const int channelPinB = HALL_B;
+  const uint8_t channelPinA = HALL_A;
+  const uint8_t channelPinB = HALL_B;
 
   for (;;) {
     bool arePinsEqual = digitalRead(channelPinA) == digitalRead(channelPinB);
@@ -137,17 +137,17 @@ void Task2MoveMotor(void *pvParameters) {
 }
 
 double Task2PID(int8_t ref, int16_t angleMesurat) {
-  const double Kp = 10;
-  const double Ki = 0;
-  const double Kd = 0;
+  const float Kp = 10;
+  const float Ki = 0;
+  const float Kd = 0;
   const uint8_t Tpid = 10;
   static int16_t lastError = 0;
-  static double I = 0;
+  static float I = 0;
 
-  int16_t error = ref - angleMesurat;
-  double P = Kp * error;
+  float error = (int16_t) ref - angleMesurat;
+  float P = Kp * error;
   I += Ki * Tpid * error;
-  double D = Kd * (error - lastError) / Tpid;
+  float D = Kd * (error - lastError) / (float)Tpid;
   return P + I + D;
 }
 
