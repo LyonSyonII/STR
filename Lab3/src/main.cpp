@@ -91,7 +91,6 @@ void Task1ReadHall(void *pvParameters) {
   const int channelPinB = HALL_B;
 
   for (;;) {
-    // Serial.println("Running task1");
     bool arePinsEqual = digitalRead(channelPinA) == digitalRead(channelPinB);
 
     is_motor_clockwise =
@@ -125,13 +124,8 @@ void InterruptReadHallB() {
 
 void Task2MoveMotor(void *pvParameters) {
   for (;;) {
-    // Serial.println("Running task2");
     int16_t angleMesurat = Task1HallCounter * hall_delta;
     double pwm = Task2PID(reference_angle, angleMesurat);
-    // Serial.print("Mesurat = "); Serial.println(angleMesurat);
-    // Serial.print("Reference = "); Serial.println(reference_angle);
-    // Serial.print("Target = "); Serial.println(pwm);
-    // Serial.println();
 
     digitalWrite(DIR_A, pwm < 0 ? 1 : 0);
     pwm = abs(pwm);
@@ -159,7 +153,6 @@ double Task2PID(int8_t ref, int16_t angleMesurat) {
 
 void Task3UpdateRef(void *pvParameters) {
   for (;;) {
-    // Serial.println("Running task3");
     reference_angle *= -1;
     vTaskDelayUntil(&xLastWakeTime3, pdMS_TO_TICKS(1000));
   }
@@ -173,7 +166,6 @@ void Task9Trace(void *pvParameters) {
   pinMode(A5, INPUT);
 
   for (;;) {
-    // Serial.println("Running task9");
     int adcA1 = analogRead(A1);
     int adcA2 = analogRead(A2);
     int adcA3 = analogRead(A3);
