@@ -31,6 +31,10 @@ LOG_LEVEL = str(os.getenv("LOG_LEVEL", "info"))
 LOG_TO_FILE = bool(os.getenv("LOG_TO_FILE", True))
 
 # Input data configuration
+class SerialArgs():
+    START = "===START==="
+
+
 START_INDICATOR = os.getenv("START_INDICATOR", "===START===")
 END_INDICATOR = os.getenv("END_INDICATOR", "===END===")
 TASK_STATE_INDICATOR = os.getenv("TASK_STATE_INDICATOR", "DATA")

@@ -5,7 +5,7 @@
 #include "timers.h"
 
 // circular buffer for debugging
-#define BUFF_SIZE 250
+#define BUFF_SIZE 500
 
 float t[BUFF_SIZE] = {};
 byte circ_buffer1[BUFF_SIZE] = {};
@@ -184,6 +184,23 @@ void Task9Trace(void *pvParameters) {
     Serial.print(",");
     Serial.print(adcA5);
     Serial.println();
+    
+    for (unsigned int i = 0; i < circ_buffer_counter; i++) {
+      Serial.println("DAT");
+      Serial.print((float)t[i]);
+      Serial.print(",");
+      Serial.write((uint8_t)circ_buffer1[i]);
+      Serial.print(",");
+      Serial.write((uint8_t)circ_buffer2[i]);
+      Serial.print(",");
+      Serial.write((uint8_t)circ_buffer3[i]);
+      Serial.print(",");
+      Serial.write((uint8_t)circ_buffer9[i]);
+      Serial.print(",");
+      Serial.print((float)debug_data1[i]);
+      Serial.println();
+    }
+    circ_buffer_counter = 0;
     vTaskDelayUntil(&xLastWakeTime9, pdMS_TO_TICKS(200));
   }
 }
@@ -233,7 +250,7 @@ void str_trace(void) {
   circ_buffer2[circ_buffer_counter] = eTaskGetState(Task2MoveMotorHandle);
   circ_buffer3[circ_buffer_counter] = eTaskGetState(Task3UpdateRefHandle);
   circ_buffer9[circ_buffer_counter] = eTaskGetState(Task9TraceHandle);
-  debug_data1[circ_buffer_counter] = 2.7;
+  debug_data1[circ_buffer_counter] = Task1HallCounter * hall_delta;
 }
 
 /**

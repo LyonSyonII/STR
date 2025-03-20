@@ -8,7 +8,7 @@ from plot.config.parameter import START_TIME, \
                                   START_INDICATOR, END_INDICATOR, TASK_STATE_INDICATOR, MOTOR_STATE_INDICATOR, \
                                   OUTPUT_DIR, \
                                   START_TIMEOUT, SERIAL_TIMEOUT, \
-                                  PERFORMANCE_PROFILING
+                                  PERFORMANCE_PROFILING, SerialArgs
 from plot.config.logger_handler import LoggerHandler
 from plot.utils.serial import SerialUtilities
 from plot.utils.parser import ParserUtilities
@@ -68,7 +68,7 @@ async def main():
                     else:
                         tasks_states.append(task_data)
 
-                case value if value == START_INDICATOR:
+                case SerialArgs.START:
                     _logger.warning(f"Start indicator received again: {data}")
 
                 case value if value == END_INDICATOR:
