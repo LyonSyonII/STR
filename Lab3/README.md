@@ -14,12 +14,16 @@ Creiem que pot ser perquè la tasca `ReadHall` (que s'activa amb l'interrupt de 
 que `MoveMotor`, fet que causa que la tasca `MoveMotor` tardi molt en finalitzar.
 
 Amb els grafs de les tasques es pot veure clarament a la zona taronja:
-![](./python/task_plot.jpeg)
+![](./images/task_state.png)
 
 D'altra banda, aquest fet no té cap efecte a simple vista, semblant que el motor es mou com hauria.
 
 Això es reforça amb el graf del moviment del motor, on podem observar que segueix la referència força d'aprop:
 
-![](./python/angle_plot.jpeg).
+![](./images/motor_angle.png)
 
 Les irregularitats de la part superior i inferior del graf són molt probablement degudes a un PID insuficientment ajustat.
+
+I finalment com a curiositat podem veure l'estat dels sensors cada 200ms:
+
+![](./images/motor_sensor.png)

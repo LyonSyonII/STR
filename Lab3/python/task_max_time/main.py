@@ -20,13 +20,13 @@ for task in tasks:
             if current_run_start is None:  # Start tracking new run
                 current_run_start = timestamp
         elif current_run_start is not None:
-                if current_state == 'TaskState.Blocked' or current_state == 'TaskState.Suspended':
-                    # Calculate duration from Running start to Blocked
-                    duration = timestamp - current_run_start
-                    if duration > max_duration:
-                        max_duration = duration
-                # Reset tracking regardless of intermediate state
-                current_run_start = None
+            if current_state == 'TaskState.Blocked' or current_state == 'TaskState.Suspended':
+                # Calculate duration from Running start to Blocked
+                duration = timestamp - current_run_start
+                if duration > max_duration:
+                    max_duration = duration
+            # Reset tracking regardless of intermediate state
+            current_run_start = None
     
             
     # Store result

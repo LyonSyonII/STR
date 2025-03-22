@@ -14,6 +14,8 @@
         nativeBuildInputs = with pkgs; [
           (python3.withPackages (py: [
             py.pandas
+            py.pyserial
+            py.matplotlib
           ]))
         ];
 
