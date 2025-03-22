@@ -3,12 +3,7 @@ import asyncio
 from datetime import datetime
 
 # local imports
-from plot.config.parameter import START_TIME, \
-                                  BUFFER_SIZE, COM_PORT, BAUD_RATE, \
-                                  START_INDICATOR, END_INDICATOR, TASK_STATE_INDICATOR, MOTOR_STATE_INDICATOR, \
-                                  OUTPUT_DIR, \
-                                  START_TIMEOUT, SERIAL_TIMEOUT, \
-                                  PERFORMANCE_PROFILING, SerialArgs
+from plot.config.parameter import Environment, SerialHeaders, SerialParameters
 from plot.config.logger_handler import LoggerHandler
 from plot.utils.serial import SerialUtilities
 from plot.utils.parser import ParserUtilities
@@ -19,25 +14,19 @@ from plot.models.tasks_states import TasksState
 
 _logger = LoggerHandler.get_logger()
 
-async def main():
+async def read_serial_data() -> tuple[list[TasksState], list[MotorSensorData]]:
     """
-    Main function to plot the data received from the serial port
+    Read the data from the serial port and
+    return the tasks states and motor sensors data
     """
-    _logger.debug(f"Connecting to '{COM_PORT}' at {BAUD_RATE} bauds\n"
-                  f"Expected data size: {BUFFER_SIZE} samples\n"
-                  f"Using start indicator: '{START_INDICATOR}'\n"
-                  f"Using end indicator: '{END_INDICATOR}'\n"
-                  f"Using task state indicator: '{TASK_STATE_INDICATOR}'\n"
-                  f"Using motor state indicator: '{MOTOR_STATE_INDICATOR}'")
-
 
     tasks_states: list[TasksState] = []
     motors_sensors: list[MotorSensorData] = []
 
-    with SerialUtilities(port=COM_PORT,
-                         baud_rate=BAUD_RATE,
-                         serial_timeout=SERIAL_TIMEOUT,
-                         start_timeout=START_TIMEOUT,
+    with SerialUtilities(port=SerialParameters.COM_PORT.value,
+                         baud_rate=SerialParameters.BAUD_RATE.value,
+                         serial_timeout=SerialParameters.SERIAL_TIMEOUT.value,
+                         start_timeout=SerialParameters.START_TIMEOUT.value,
                          should_start=True) as ser:
 
         received_end_indicator = False
@@ -46,7 +35,7 @@ async def main():
             data = ser.read_line_str()
 
             match data:
-                case value if value == MOTOR_STATE_INDICATOR:
+                case SerialHeaders.MOTOR_STATE.value:
                     data = ser.read_line_str()
                     _logger.info(f"Received motor data: {data}")
 
@@ -57,7 +46,7 @@ async def main():
                     else:
                         motors_sensors.append(motor_data)
 
-                case value if value == TASK_STATE_INDICATOR:
+                case SerialHeaders.TASK_STATE.value:
                     data = ser.read_line_str()
                     _logger.info(f"Received task state data: {data}")
 
@@ -68,66 +57,148 @@ async def main():
                     else:
                         tasks_states.append(task_data)
 
-                case SerialArgs.START:
+                case SerialHeaders.START.value:
                     _logger.warning(f"Start indicator received again: {data}")
 
-                case value if value == END_INDICATOR:
+                case SerialHeaders.END.value:
                     _logger.info(f"End indicator received: {data}")
                     received_end_indicator = True
 
                 case _:
                     _logger.warning(f"Received unknown data: {data}")
 
-    _logger.warning(f"Received {len(motors_sensors)} motor samples")
-    for i, motor_sensor in enumerate(motors_sensors):
-        _logger.info(f"Motor sensor {i}: {motor_sensor}")
+    tasks_states.sort(key=lambda t: t["timestamp"])
+    motors_sensors.sort(key=lambda t: t["timestamp"])
 
-    _logger.warning(f"Received {len(tasks_states)} task samples")
-    for i, task_state in enumerate(tasks_states):
-        _logger.info(f"Task state {i}: {task_state}")
+    return tasks_states, motors_sensors
 
-    output_subdir = os.path.join(OUTPUT_DIR, START_TIME.strftime("%Y-%m-%d_%H-%M-%S"))
-    os.makedirs(output_subdir, exist_ok=True)
+async def save_data_to_csv(tasks_states: list[TasksState], motors_sensors: list[MotorSensorData], output_dir: str):
+    """
+    Saves the data into csv files
+    """
 
-    motor_sensor_file = os.path.join(output_subdir, "motor_sensor.png")
-    task_state_file = os.path.join(output_subdir, "task_state.png")
-    motor_sensor_csv = os.path.join(output_subdir, "motor_sensor.csv")
-    task_state_csv = os.path.join(output_subdir, "task_state.csv")
+    motor_sensor_file = os.path.join(output_dir, "motor_sensor.csv")
+    task_state_file = os.path.join(output_dir, "task_state.csv")
 
     try:
-        CSVUtilities.save_motor_data(motors_sensors, motor_sensor_csv)
+        CSVUtilities.save_motor_data(motors_sensors, motor_sensor_file)
     except Exception as e:
-        _logger.error(f"Unable to save motor data to CSV '{motor_sensor_csv}:\n{e}")
-
-    CSVUtilities.save_task_states(tasks_states, task_state_csv)
-    # try:
-    #     CSVUtilities.save_task_states(tasks_states, task_state_csv)
-    # except Exception as e:
-    #     _logger.error(f"Unable to save task states to CSV '{task_state_csv}:\n{e}")
+        _logger.error(f"Unable to save motor data to CSV '{motor_sensor_file}:\n{e}")
 
     try:
-        PlotUtilities.plot_motor_data(motors_sensors, motor_sensor_file)
+        CSVUtilities.save_task_states(tasks_states, task_state_file)
     except Exception as e:
-        _logger.error(f"Unable to plot motor data to file '{motor_sensor_file}:\n{e}")
+        _logger.error(f"Unable to save task states to CSV '{task_state_file}:\n{e}")
 
-    try:
-        PlotUtilities.plot_task_states(tasks_states, task_state_file)
-    except Exception as e:
-        _logger.error(f"Unable to plot task states to file '{task_state_file}:\n{e}")
+async def load_data_from_csv(output_dir: str) -> tuple[list[TasksState], list[MotorSensorData]]:
+    """
+    Load the data from the csv files.
+    It expects the files to be named 'motor_sensor.csv' and 'task_state.csv'
+    """
+
+    motor_sensor_file = os.path.join(output_dir, "motor_sensor.csv")
+    task_state_file = os.path.join(output_dir, "task_state.csv")
+
+    tasks_states = []
+    motors_sensors = []
+
+    _logger.warning(f"Reading motor data from file '{motor_sensor_file}'")
+    motors_sensors = CSVUtilities.read_motor_data(motor_sensor_file)
+
+    _logger.warning(f"Reading task states from file '{task_state_file}'")
+    tasks_states = CSVUtilities.read_tasks_data(task_state_file)
+
+    return tasks_states, motors_sensors
+
+async def plot_data(tasks_states: list[TasksState],
+                    motors_sensors: list[MotorSensorData], output_dir: str,
+                    max_time: datetime | None = None,
+                    max_task_state_time: datetime | None = None):
+    """
+    Plot the data to the output directory
+    """
+
+    motor_sensor_file = os.path.join(output_dir, "motor_sensor.png")
+    task_state_file = os.path.join(output_dir, "task_state.png")
+    debug_task_state_file = os.path.join(output_dir, "task_state_debug.png")
+
+    _logger.warning(f"Plotting motor data to file '{motor_sensor_file}'")
+    PlotUtilities.plot_motor_data(motors_sensors, motor_sensor_file, max_time=max_time)
+
+    _logger.warning(f"Plotting task states to file '{task_state_file}'")
+    PlotUtilities.plot_task_states(tasks_states, task_state_file, max_time=max_task_state_time)
+
+    _logger.warning(f"Plotting tasks states debug to file '{debug_task_state_file}'")
+    PlotUtilities.plot_debug_value(tasks_states,
+                                    debug_task_state_file,
+                                    debug_label="Motor Angle",
+                                    max_time=max_time)
+
+async def main():
+    """
+    Main function to plot the data received from the serial port
+    """
+
+    data_dir = Environment.DATA_DIR.value
+    tasks_states: list[TasksState] = []
+    motors_sensors: list[MotorSensorData] = []
+    max_time = datetime(year=2025,
+                        month=3,
+                        day=20,
+                        hour=0,
+                        minute=0,
+                        second=10)
+    max_task_state_time = datetime(year=2025,
+                                   month=3,
+                                   day=20,
+                                   hour=0,
+                                   minute=0,
+                                   second=3)
+
+
+    if (not SerialParameters.SKIP_SERIAL_READ.value):
+
+        output_dir = os.path.join(Environment.OUTPUT_DIR.value,
+                                  Environment.START_TIME.value.strftime("%Y-%m-%d_%H-%M-%S"))
+
+        if (not os.path.exists(output_dir)):
+            _logger.warning(f"Creating data directory: {output_dir}")
+            os.makedirs(output_dir)
+
+        if (Environment.DATA_DIR.value is None) \
+            or (not os.path.exists(Environment.DATA_DIR.value)) \
+            or (len(Environment.DATA_DIR.value) == 0) \
+            or (Environment.DATA_DIR.value == ""):
+            data_dir = output_dir
+
+        tasks_states, motors_sensors = await read_serial_data()
+
+        _logger.warning(f"Received {len(motors_sensors)} motor samples")
+        for i, motor_sensor in enumerate(motors_sensors):
+            _logger.info(f"Motor sensor {i}: {motor_sensor}")
+
+        _logger.warning(f"Received {len(tasks_states)} task samples")
+        for i, task_state in enumerate(tasks_states):
+            _logger.info(f"Task state {i}: {task_state}")
+
+        await save_data_to_csv(tasks_states, motors_sensors, output_dir)
+
+        _logger.warning(f"Data saved to '{output_dir}'")
+
+    else:
+        if (not os.path.exists(Environment.DATA_DIR.value)):
+            _logger.error(f"Data directory '{Environment.OUTPUT_DIR.value}' does not exist")
+            return
+
+        tasks_states, motors_sensors = await load_data_from_csv(data_dir)
+
+        _logger.warning(f"Loaded {len(motors_sensors)} motor samples")
+        _logger.warning(f"Loaded {len(tasks_states)} task samples")
+
+    await plot_data(tasks_states, motors_sensors, data_dir, max_time, max_task_state_time)
 
 if __name__ == '__main__':
-    if (not PERFORMANCE_PROFILING):
-        asyncio.run(main())
-    else:
-        from cProfile import Profile
-        from pstats import SortKey, Stats
-
-        with Profile() as pr:
-            asyncio.run(main())
-            stats = Stats(pr)
-            stats.strip_dirs()
-            stats.sort_stats(SortKey.TIME)
-            stats.print_stats(15)
+    asyncio.run(main())
 
     _end_time = datetime.now()
-    _logger.warning(f"Total execution time: {_end_time - START_TIME}")
+    _logger.warning(f"Total execution time: {_end_time - Environment.START_TIME.value}")

@@ -6,10 +6,7 @@ import time
 from datetime import datetime
 
 # local imports
-from plot.config.parameter import COM_PORT, BAUD_RATE, \
-    SERIAL_TIMEOUT, START_TIMEOUT, \
-    START_INDICATOR, END_INDICATOR, MOTOR_STATE_INDICATOR, TASK_STATE_INDICATOR, \
-    ENCODING
+from plot.config.parameter import SerialHeaders
 from plot.config.logger_handler import LoggerHandler
 
 class SerialUtilities:
@@ -21,13 +18,13 @@ class SerialUtilities:
     _baud_rate: int
     _serial: serial.Serial
 
-    _logger = LoggerHandler.get_logger()
+    _logger = LoggerHandler.get_logger("serial")
 
     def __init__(self,
-                 port: str = COM_PORT,
-                 baud_rate: int = BAUD_RATE,
-                 serial_timeout: int = SERIAL_TIMEOUT,
-                 start_timeout: int = START_TIMEOUT,
+                 port: str,
+                 baud_rate: int,
+                 serial_timeout: int,
+                 start_timeout: int,
                  should_start: bool = False):
         """
         Constructor
@@ -46,8 +43,8 @@ class SerialUtilities:
 
         available_serial_ports = [
             port.device for port in serial.tools.list_ports.comports()]
-        if (COM_PORT not in available_serial_ports):
-            raise Exception(f"Serial port '{COM_PORT}' not available"
+        if (port not in available_serial_ports):
+            raise Exception(f"Serial port '{port}' not available"
                             f"\nAvailable ports: {available_serial_ports}")
 
         self._logger.debug(f"Connecting to serial port '{self._port}' with baud rate {self._baud_rate}")
@@ -59,10 +56,10 @@ class SerialUtilities:
         self._logger.info(f"Connected to serial port '{self._port}' at {self._baud_rate} bauds")
 
         if should_start:
-            started = self.wait_for_start_signal(self._start_timeout, START_INDICATOR)
+            started = self.wait_for_start_signal(self._start_timeout, SerialHeaders.START.value)
 
             if not started:
-                raise Exception(f"Start signal '{START_INDICATOR}' not received after {self._start_timeout} seconds")
+                raise Exception(f"Start signal '{SerialHeaders.START.value}' not received after {self._start_timeout} seconds")
 
             self._logger.info("Start signal received successfully.")
 
@@ -87,7 +84,7 @@ class SerialUtilities:
         """
         self._serial.close()
 
-    def wait_for_start_signal(self, timeout: int = START_TIMEOUT, header: str = START_INDICATOR) -> bool:
+    def wait_for_start_signal(self, timeout: int, header: str) -> bool:
         """
         Wait for the start signal.
         This is a blocking function.
@@ -122,7 +119,7 @@ class SerialUtilities:
 
         return False
 
-    def read_line_str(self, encoding: str = ENCODING, errors: str = "ignore") -> str:
+    def read_line_str(self, encoding: str = "utf-8", errors: str = "ignore") -> str:
         """
         Read a line from the serial port
 
@@ -135,15 +132,4 @@ class SerialUtilities:
         """
         data = self._serial.readline().decode(encoding, errors=errors).strip()
         self._logger.debug(f"Read: {data}")
-        return data
-
-    def read_line(self) -> bytes:
-        """
-        Read a line from the serial port
-
-        :return: line read
-        :rtype: bytes
-        """
-        data = self._serial.readline()
-        self._logger.debug(f"Read: {str(data)}")
         return data
