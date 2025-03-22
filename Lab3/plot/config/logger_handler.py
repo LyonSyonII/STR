@@ -60,34 +60,29 @@ class LoggerHandler:
         if (isinstance(level, str)):
             level = LoggerHandler._get_log_level(level)
 
-        # Create the logger
         logger = getLogger(name)
 
-        # Create the file handler
+        logger.propagate = False
+
         log_dir = LoggerHandler._log_directory(base_dir)
         file_name = f"{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.log"
         log_file = os.path.join(log_dir, file_name)
 
-        # Create the console handler
         console_handler = StreamHandler()
         console_handler.setLevel(level)
         console_handler.set_name("console_handler")
 
-        # Create the formatter and add it to the handlers
         formatter = Formatter(fmt="\n[%(levelname)s] %(asctime)s.%(msecs)03d - %(name)s - %(filename)s:%(lineno)d (%(funcName)s)"
                                   "\n%(message)s",
                               datefmt="%Y-%m-%dT%H:%M:%S", style='%')
 
         console_handler.setFormatter(formatter)
 
-        # Remove all handler from the logger
-        # This is done to prevent duplicate logs
         for handler in logger.handlers:
             logger.removeHandler(handler)
 
         logger.addHandler(console_handler)
 
-        # Add a file handler if needed
         if (write_to_file):
             file_handler = FileHandler(
                 log_file,
@@ -99,12 +94,8 @@ class LoggerHandler:
             file_handler.set_name("file_handler")
             logger.addHandler(file_handler)
 
-        # for handler in logger.handlers:
-        #     print(handler.get_name())
-
         logger.setLevel(DEBUG)
 
-        # Set the logger
         LoggerHandler._loggers[name] = True
 
     @staticmethod

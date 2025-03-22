@@ -7,7 +7,8 @@ class TasksState(TypedDict):
     task1_state: TaskState
     task2_state: TaskState
     task3_state: TaskState
-    task4_state: TaskState
-    task5_state: TaskState
-    task6_state: TaskState
-    debug_value: str
+    # task4_state: TaskState
+    # task5_state: TaskState
+    # task6_state: TaskState
+    task9_state: TaskState
+    debug_value: float

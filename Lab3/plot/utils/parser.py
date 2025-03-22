@@ -5,14 +5,13 @@ from plot.enums.task_state import TaskState
 from plot.models.motor_sensor import MotorSensorData
 from plot.models.tasks_states import TasksState
 from plot.config.logger_handler import LoggerHandler
-from plot.config.parameter import START_TIME
 
 class ParserUtilities:
     """
     Utilities to parse the serial data and return an object
     """
 
-    _logger = LoggerHandler.get_logger()
+    _logger = LoggerHandler.get_logger("parser")
 
     @staticmethod
     def _clean_data(data: str) -> str:
@@ -44,14 +43,14 @@ class ParserUtilities:
 
         try:
             sensor_values = data.split(",")
-            miliseconds = float(sensor_values[0])
+            milliseconds = float(sensor_values[0])
             sensor_a1 = int(sensor_values[1])
             sensor_a2 = int(sensor_values[2])
             sensor_a3 = int(sensor_values[3])
             sensor_a4 = int(sensor_values[4])
             sensor_a5 = int(sensor_values[5])
 
-            timestamp = datetime(year=START_TIME.year, month=START_TIME.month, day=START_TIME.day) + timedelta(milliseconds=miliseconds)
+            timestamp = datetime(year=0, month=0, day=0) + timedelta(milliseconds=milliseconds)
 
             return MotorSensorData(timestamp=timestamp,
                                    sensor_a1=sensor_a1,
@@ -110,35 +109,45 @@ class ParserUtilities:
 
         try:
             task_values = data.split(",")
-            miliseconds = float(task_values[0])
+            milliseconds = float(task_values[0])
             task1_state = ParserUtilities._get_task_state(task_values[1])
             task2_state = ParserUtilities._get_task_state(task_values[2])
             task3_state = ParserUtilities._get_task_state(task_values[3])
-            task4_state = ParserUtilities._get_task_state(task_values[4])
-            task5_state = ParserUtilities._get_task_state(task_values[5])
-            task6_state = ParserUtilities._get_task_state(task_values[6])
-            debug_value = task_values[7]
+            # task4_state = ParserUtilities._get_task_state(task_values[4])
+            # task5_state = ParserUtilities._get_task_state(task_values[5])
+            # task6_state = ParserUtilities._get_task_state(task_values[6])
+            task9_state = ParserUtilities._get_task_state(task_values[4])
+            debug_value = task_values[5]
 
-            if None in {task1_state, task2_state, task3_state, task4_state, task5_state, task6_state}:
+            if None in {task1_state,
+                        task2_state,
+                        task3_state,
+                        # task4_state,
+                        # task5_state,
+                        # task6_state,
+                        task9_state}:
                 ParserUtilities._logger.error("Error while parsing task state"
                                               f"task1_state: {task1_state}"
                                               f"task2_state: {task2_state}"
                                               f"task3_state: {task3_state}"
-                                              f"task4_state: {task4_state}"
-                                              f"task5_state: {task5_state}"
-                                              f"task6_state: {task6_state}")
+                                            #   f"task4_state: {task4_state}"
+                                            #   f"task5_state: {task5_state}"
+                                            #   f"task6_state: {task6_state}"
+                                              f"task6_state: {task9_state}")
                 return None
 
-            timestamp = datetime(year=START_TIME.year, month=START_TIME.month, day=START_TIME.day) + timedelta(milliseconds=miliseconds)
+            timestamp = datetime(year=0, month=0, day=0) + timedelta(milliseconds=milliseconds)
 
             return TasksState(timestamp=timestamp,
-                               task1_state=task1_state,
-                               task2_state=task2_state,
-                               task3_state=task3_state,
-                               task4_state=task4_state,
-                               task5_state=task5_state,
-                               task6_state=task6_state,
-                               debug_value=debug_value) # type: ignore
+                               task1_state=task1_state, # type: ignore
+                               task2_state=task2_state, # type: ignore
+                               task3_state=task3_state, # type: ignore
+                            #    task4_state=task4_state, # type: ignore
+                            #    task5_state=task5_state, # type: ignore
+                            #    task6_state=task6_state, # type: ignore
+                               task9_state=task9_state, # type: ignore
+                               debug_value=debug_value # type: ignore
+                               )
 
         except Exception as e:
             ParserUtilities._logger.error(f"Error while parsing task state: {e}")

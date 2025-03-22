@@ -2,48 +2,41 @@
 
 # standard imports
 from datetime import datetime
+from enum import Enum
 import os
 
-# third party imports
-from dotenv import load_dotenv
+class Environment(Enum):
+    START_TIME = datetime.now()
+    CWD = "."
 
-# local imports
-from .logger_handler import LoggerHandler
+    OUTPUT_DIR = os.path.join(CWD, "output")
+    DATA_DIR = os.path.join(CWD, "output/2025-03-20_18-55-35")
 
-# Basic environment variables
-START_TIME = datetime.now()
-CWD = os.path.dirname(os.path.abspath(__file__))
+    # Available log levels: debug, info, warning, error, critical
+    LOG_LEVEL = "warning"
+    LOG_TO_FILE = True
 
-load_dotenv(verbose=True)
+    PERFORMANCE_PROFILING = False
 
-# Serial port configuration
-BUFFER_SIZE = int(os.getenv("BUFFER_SIZE", 10000))
-COM_PORT = os.getenv("COM_PORT", "COM3")
-BAUD_RATE = int(os.getenv("BAUD_RATE", 115200))
+class CSVParameters(Enum):
+    ENCODING = "utf-8"
+    CSV_SEPARATOR = ","
 
-# Generated data configuration
-OUTPUT_DIR = os.getenv("OUTPUT_DIR", os.path.join(CWD, "output"))
-ENCODING = os.getenv("ENCODING", "utf-8")
-CSV_SEPARATOR = os.getenv("CSV_SEPARATOR", ",")
+class SerialHeaders(Enum):
+    START = "=== START ==="
+    END = "=== END ==="
+    TASK_STATE = "DAT"
+    MOTOR_STATE = "OSC"
 
-# Logging configuration
-LOG_LEVEL = str(os.getenv("LOG_LEVEL", "info"))
-LOG_TO_FILE = bool(os.getenv("LOG_TO_FILE", True))
+class SerialParameters(Enum):
+    SKIP_SERIAL_READ = True
 
-# Input data configuration
-START_INDICATOR = os.getenv("START_INDICATOR", "===START===")
-END_INDICATOR = os.getenv("END_INDICATOR", "===END===")
-TASK_STATE_INDICATOR = os.getenv("TASK_STATE_INDICATOR", "DATA")
-MOTOR_STATE_INDICATOR = os.getenv("MOTOR_STATE_INDICATOR", "OSC")
+    BUFFER_SIZE = 500
+    COM_PORT = "COM5"
+    BAUD_RATE = 115200
 
-# Debugging utilities
-PERFORMANCE_PROFILING = bool(os.getenv("PERFORMANCE_PROFILING", False))
+    START_TIMEOUT = 50
+    SERIAL_TIMEOUT = 5
 
-# Timeouts
-START_TIMEOUT = int(os.getenv("START_TIMEOUT", 5))
-SERIAL_TIMEOUT = int(os.getenv("SERIAL_TIMEOUT", 5))
-
-# setup the root logger
-LoggerHandler.set_logger(level=LOG_LEVEL,
-                         write_to_file=LOG_TO_FILE,
-                         name="root")
+class PlotParameters(Enum):
+    DPI = 200
