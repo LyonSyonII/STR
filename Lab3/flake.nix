@@ -12,7 +12,11 @@
     {
       devShells.default = pkgs.mkShell rec {
         nativeBuildInputs = with pkgs; [
-          python3
+          (python3.withPackages (py: [
+            py.pandas
+            py.pyserial
+            py.matplotlib
+          ]))
         ];
 
         buildInputs = with pkgs; [

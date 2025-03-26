@@ -1,37 +1,29 @@
 # Lab 3 - Motor Position Control
-> Com funciona una aplicacio realista amb FreeRTOS
+> Ziang Dai i Liam Garriga
 
-## Encoder
-Dos sensors efecte hall
-> Quan passa una part metalica al costat genera un pols (ISR)
+Temps Màxim de Comput de les tasques:
+```
+       ReadHall: 0.214310 seconds
+      MoveMotor: 0.399730 seconds
+UpdateReference: 0.000130 seconds
+          Trace: 0.117010 seconds
+```
 
-Quan mes rapid giri, més petits són els polsos.  
-Ho agafem des del micro amb una interrupcio (flanc pujada/baixada pin del pols).
+Podem veure que tant la tasca `ReadHall` com `MoveMotor` sobrepassen el seu deadline per molt.  
+Creiem que pot ser perquè la tasca `ReadHall` (que s'activa amb l'interrupt de l'encoder ) té una prioritat més alta 
+que `MoveMotor`, fet que causa que la tasca `MoveMotor` tardi molt en finalitzar.
 
-Quina senyal li ha de donar els interruptors és una tasca (PID).  
-Farem passar la interrupció pel FreeRTOS.
+Amb els grafs de les tasques es pot veure clarament a la zona taronja:
+![](./images/task_state.png)
 
-## PID
-ref = alternant entre -90 i 90 cada segon
-error = ref - angleMesurat
-P = Kp * error
-I += Ki * Tpid * error
-D = Kd * (error - last_error) / Tpid
+D'altra banda, aquest fet no té cap efecte a simple vista, semblant que el motor es mou com hauria.
 
-u = P + I + D
+Això es reforça amb el graf del moviment del motor, on podem observar que segueix la referència força d'aprop:
 
-Signe => Direccio
-Modul => PWM
+![](./images/motor_angle.png)
 
-## Tasques
-- Step 3 Llegir valor de l'encoder
-- Step 4 Plot data
-- Step 5.a Moure motor
-- Step 5.b Canviar valor de referencia cada segon (+90 a -90)
+Les irregularitats de la part superior i inferior del graf són molt probablement degudes a un PID insuficientment ajustat.
 
+I finalment com a curiositat podem veure l'estat dels sensors cada 200ms:
 
-
-# TENIM ASSIGNAT EL MOTOR 2
-
-Quan utilitzar xxxFromISR();
-
+![](./images/motor_sensor.png)

@@ -23,11 +23,11 @@ const uint8_t HALL_B = 19;
 /* TASK VARIABLES */
 /******************/
 
-uint8_t Task2RunningPin = 0;
+uint8_t Task1RunningPin = 0;
 
 // This must be a signed integer since the motor
 // must be able to rotate in both directions
-int16_t Task2HallCounter = 0;
+int16_t Task1HallCounter = 0;
 
 /*******************/
 /* MOTOR VARIABLES */
