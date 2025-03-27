@@ -3,6 +3,8 @@
 #include "ArduinoJson.h"  //JSON packaging
 #include "M5StickCPlus.h"
 
+// Tenim el num 1 //
+
 // char ssid[] = "WiFiAccessPointGiga_1";        // your network SSID (name)
 // char password[] = "WiFiAccessPointGiga_1";        // your network password (use for WPA, or use as key for WEP)
 // char ssid[] = "wlan_str";        // your network SSID (name)
@@ -62,13 +64,14 @@ void IMUCalibration(void);
 void setup() {
     Serial.begin(115200);
     Serial.println("Init...");
-
+    
     initM5StickCPlus();
 }
 
 void loop() {
     tStart = millis();
 
+    // Task: ReadSensors
     M5.Imu.getGyroData(&gX, &gY, &gZ);   // gyroscope
     M5.Imu.getAccelData(&aX, &aY, &aZ);  // accelerometer
 
@@ -81,8 +84,7 @@ void loop() {
     // -xGyro*M5.IMU.gRes 
     // M5.IMU.gRes=0.01 https://docs.m5stack.switch-science.com/en/arduino/m5stickc/sh200q_m5stickc degrees per
     // second. TODO: check it
-    xOmega = -xGyro * 0.01;  
-                             
+    xOmega = -xGyro * 0.01;
 
     roll = -360.0 / 6.28 * atan2(-xAcc, zAcc);
     pitch = 360.0 / 6.28 * atan2(yAcc, zAcc);
@@ -145,14 +147,14 @@ void loop() {
 
 // IMUCalibration is only used to remove gyroscope offset
 void IMUCalibration(void) {
-    unsigned int calibrationIter = 100;
-    // Serial.println("Calibrating IMU... do not move the IMU");
-
+    unsigned int calibrationIter = 10000;
+    M5.Lcd.fillScreen(BLACK);
+    Serial.println("Calibrating IMU... do not move the IMU");
+    M5.Lcd.println("Cal.");
     for (int i = 0; i < calibrationIter; i++) {
         M5.Imu.getAccelData(&aX, &aY, &aZ);
         M5.Imu.getGyroData(&gX, &gY, &gZ);
         // M5.Imu.getAhrsData(&pit, &rol, &yaw);
-
         xAccOffset += aX;
         yAccOffset += aY;
         zAccOffset += aZ;
@@ -160,12 +162,15 @@ void IMUCalibration(void) {
         yGyroOffset += gY;
         zGyroOffset += gZ;
     }
-    xAccOffset = xAccOffset / 100.0;
-    yAccOffset = yAccOffset / 100.0;
-    zAccOffset = zAccOffset / 100.0 - 1.0;
-    xGyroOffset = xGyroOffset / 100.0;
-    yGyroOffset = yGyroOffset / 100.0;
-    zGyroOffset = zGyroOffset / 100.0;
+    xAccOffset = xAccOffset / (float)calibrationIter;
+    yAccOffset = yAccOffset / (float)calibrationIter;
+    zAccOffset = zAccOffset / (float)calibrationIter - 1.0;
+    xGyroOffset = xGyroOffset / (float)calibrationIter;
+    yGyroOffset = yGyroOffset / (float)calibrationIter;
+    zGyroOffset = zGyroOffset / (float)calibrationIter;
+    Serial.println("IMU calibrated!");
+    M5.Lcd.println("Done");
+    M5.Lcd.fillScreen(BLACK);
 }
 
 void initM5StickCPlus(void) {
@@ -232,3 +237,14 @@ void initWifi(void) {
     // delay(100);
     // Udp.begin(8888);
 }
+
+
+// /**
+//  * @brief Get the time since system start in milliseconds
+//  *
+//  * @return float
+//  */
+// float str_getTime(void) {
+//   float t = 10.0 * (float)(xTaskGetTickCount()) + 0.0005 * (float)TCNT1;
+//   return t;
+// }
