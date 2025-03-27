@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <WiFi.h>
-
 #include "ArduinoJson.h"  //JSON packaging
 #include "M5StickCPlus.h"
 
@@ -79,8 +78,11 @@ void loop() {
     xGyro = gX - xGyroOffset;
     yGyro = gY - yGyroOffset;
     zGyro = gZ - zGyroOffset;
-    xOmega = -xGyro * 0.01;  //-xGyro*M5.IMU.gRes //M5.IMU.gRes=0.01 https://docs.m5stack.switch-science.com/en/arduino/m5stickc/sh200q_m5stickc degrees per
-                             //second. TODO: check it
+    // -xGyro*M5.IMU.gRes 
+    // M5.IMU.gRes=0.01 https://docs.m5stack.switch-science.com/en/arduino/m5stickc/sh200q_m5stickc degrees per
+    // second. TODO: check it
+    xOmega = -xGyro * 0.01;  
+                             
 
     roll = -360.0 / 6.28 * atan2(-xAcc, zAcc);
     pitch = 360.0 / 6.28 * atan2(yAcc, zAcc);
