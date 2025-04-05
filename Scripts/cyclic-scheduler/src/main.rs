@@ -1,3 +1,5 @@
+use num::Integer;
+
 fn main() {
     let input = std::env::args().nth(1).unwrap_or("input.txt".to_owned());
     let input = std::fs::read_to_string(input).unwrap();
@@ -53,14 +55,14 @@ fn hyperperiod(tasks: &[Task]) -> u64 {
 fn secondary_periods(tasks: &[Task], hyperperiod: u64) -> Vec<u64> {
     let max_ci = tasks.iter().map(|t| t.computing_time).max().unwrap();
     let min_di = tasks.iter().map(|t| t.period).min().unwrap();
-    let mut frames = Vec::new();
+    let mut periods = Vec::new();
     for period in max_ci..=min_di {
         for k in 1.. {
             match (k * period).cmp(&hyperperiod) {
                 std::cmp::Ordering::Less => continue,
                 std::cmp::Ordering::Equal => {
                     println!("Found secondary period for k = {k}; period = {period}");
-                    frames.push(period);
+                    periods.push(period);
                     break;
                 },
                 std::cmp::Ordering::Greater => {
@@ -69,7 +71,22 @@ fn secondary_periods(tasks: &[Task], hyperperiod: u64) -> Vec<u64> {
             }
         }
     }
-    frames
+
+    periods.retain(|&period| {
+        println!("\nFor Ts = {period}");
+        tasks.iter().all(|task| {
+            let task_period = task.period;
+            let gcd = period.gcd(&task_period);
+            let op = 2 * period - gcd;
+            let res = op <= task_period;
+            println!("2 * {period} - gcd({period},{task_period}) <= {task_period} = {op} <= {task_period}; {res}");
+
+            res
+        })
+    });
+    println!();
+
+    periods
 }
 
 #[derive(Debug, Clone)]
