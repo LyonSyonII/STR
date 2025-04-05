@@ -32,16 +32,27 @@ fn main() {
     let tasks: &mut [Task] = &mut raw_tasks.into_iter().map(|(name, computing_time, period)| {
         Task {
             name: name.to_owned(),
-            computing_time: (computing_time * base as f64).round() as u64,
-            period: (period * base as f64).round() as u64,
+            computing_time: (computing_time * base as f64) as u64,
+            period: (period * base as f64) as u64,
         }
     }).collect::<Vec<_>>();
 
     dbg!(&tasks);
     dbg!(base);
-    dbg!(utilization(tasks));
+    let utilization = dbg!(utilization(tasks));
+    if utilization > 1. {
+        println!("utilization greater than 1, schedule does not exist!");
+        std::process::exit(1);
+    }
     let hyperperiod = dbg!(hyperperiod(tasks));
-    let secondary_periods = dbg!(secondary_periods(tasks, hyperperiod));
+    let frame_times = dbg!(frame_times(tasks, hyperperiod));
+    if frame_times.is_empty() {
+        println!("no secondary periods found, schedule does not exist!");
+        std::process::exit(1);
+    }
+    for frame_time in frame_times {
+        dbg!(frame_time, schedule(tasks, frame_time, hyperperiod));
+    }
 }
 
 fn utilization(tasks: &[Task]) -> f64 {
@@ -52,7 +63,7 @@ fn hyperperiod(tasks: &[Task]) -> u64 {
     tasks.iter().map(|t| t.period).fold(1, num::integer::lcm)
 }
 
-fn secondary_periods(tasks: &[Task], hyperperiod: u64) -> Vec<u64> {
+fn frame_times(tasks: &[Task], hyperperiod: u64) -> Vec<u64> {
     let max_ci = tasks.iter().map(|t| t.computing_time).max().unwrap();
     let min_di = tasks.iter().map(|t| t.period).min().unwrap();
     let mut periods = Vec::new();
@@ -87,6 +98,39 @@ fn secondary_periods(tasks: &[Task], hyperperiod: u64) -> Vec<u64> {
     println!();
 
     periods
+}
+
+fn schedule(tasks: &mut [Task], frame_time: u64, hyperperiod: u64) -> Option<Vec<Vec<(String, u64)>>> {
+    tasks.sort_unstable_by(|a, b| a.period.cmp(&b.period));
+    
+    let num_frames = hyperperiod / frame_time;
+    let mut available_time = vec![frame_time; num_frames as usize + 1];
+    let mut schedule = vec![Vec::<(String, u64)>::new(); num_frames as usize + 1];
+    for task in tasks {
+        let num_jobs = hyperperiod / task.period;
+        dbg!(&task.name, num_jobs);
+        for i in 0..num_jobs {
+            let frame = (task.period * i).div_ceil(frame_time);
+            let mut scheduled = false;
+            let mut c_off = 0;
+            while frame + c_off <= num_frames && c_off * frame_time <= task.period {
+                let c_fr = (frame + c_off) as usize;
+                if available_time[c_fr] >= task.computing_time {
+                    schedule[c_fr].push((task.name.clone(), i * task.period));
+                    available_time[c_fr] -= task.computing_time;
+                    scheduled = true;
+                    break;
+                }
+                c_off += 1;
+            }
+            if !scheduled {
+                println!("Can't schedule period #{i} of task {}", task.name);
+                // return None;
+            }
+        }
+    }
+
+    Some(schedule)
 }
 
 #[derive(Debug, Clone)]
