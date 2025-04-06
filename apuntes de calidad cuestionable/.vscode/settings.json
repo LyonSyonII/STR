@@ -1,0 +1,16 @@
+{
+  "markdown.copyFiles.destination": {
+    "**/*": ".attachments/${fileName}"
+  },
+  "markdown.styles": [
+    "./.vscode/markdown.css",
+  ],
+  "cSpell.words": [
+    "hyperperiod",
+    "schedulability",
+    "schedulable"
+  ],
+  "pylint.args": [
+    "--disable=missing-docstring"
+  ]
+}
