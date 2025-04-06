@@ -51,18 +51,18 @@ fn parse_tasks(input: String) -> Vec<Task> {
         .lines()
         .map(|line| {
             let mut split = line.split(',');
-            let name = split.next().expect("Expected task name");
+            let name = split.next().map(str::trim).expect("Expected task name");
             let computing_time = split
                 .next()
-                .and_then(|s| s.parse::<f64>().ok())
+                .and_then(|s| s.trim().parse::<f64>().ok())
                 .expect("Expected computing time");
             let deadline = split
                 .next()
-                .and_then(|s| s.parse::<f64>().ok())
+                .and_then(|s| s.trim().parse::<f64>().ok())
                 .expect("Expected period");
             let period = split
                 .next()
-                .and_then(|s| s.parse::<f64>().ok())
+                .and_then(|s| s.trim().parse::<f64>().ok())
                 .unwrap_or(deadline);
 
             let fract = computing_time.fract();
