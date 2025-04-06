@@ -1,4 +1,4 @@
-use num::Integer;
+use num::{Float, Integer};
 
 fn main() {
     let input = std::env::args().nth(1).unwrap_or("input.txt".to_owned());
@@ -37,6 +37,14 @@ fn main() {
     }
 }
 
+#[derive(Debug, Clone)]
+struct Task {
+    name: String,
+    computing_time: u64,
+    period: u64,
+}
+
+
 fn parse_tasks(input: String) -> Vec<Task> {
     let mut smallest = 1.;
     let raw_tasks = input
@@ -66,7 +74,7 @@ fn parse_tasks(input: String) -> Vec<Task> {
         .collect::<Vec<_>>();
 
     let base = if smallest < 1. {
-        10u64.pow(smallest.log10().abs() as u32)
+        10u64.pow(smallest.log10().abs().ceil() as u32)
     } else {
         1
     };
@@ -165,11 +173,4 @@ fn schedule(
     }
 
     Some(schedule)
-}
-
-#[derive(Debug, Clone)]
-struct Task {
-    name: String,
-    computing_time: u64,
-    period: u64,
 }
