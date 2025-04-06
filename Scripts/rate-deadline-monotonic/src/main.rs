@@ -7,6 +7,28 @@ fn main() {
     for task in &tasks {
         println!("{task:#?}");
     }
+    let is_rate_monotonic = tasks.iter().all(|t| t.period == t.deadline);
+
+    let utilization = utilization(&tasks);
+    println!("\nutilization = {utilization:.2}");
+
+    if is_rate_monotonic {
+        let schedulable_utilization = tasks.len() as f64 * (2f64.powf(1f64/tasks.len() as f64) - 1.);
+        println!("n( 2^(1/n) - 1) = {schedulable_utilization:.2}");
+        if utilization <= schedulable_utilization {
+            println!("Sufficient condition '{utilization:.2} <= {schedulable_utilization:.2}' is true; Tasks ARE schedulable!'");
+            return;
+        }
+        println!("Sufficient condition '{utilization:.2} <= {schedulable_utilization:.2}' is false; Continuing'");
+
+        let hyperbolic = hyperbolic_bound(&tasks);
+        println!("\nHyperbolic bound = {hyperbolic:.2}");
+        if hyperbolic <= 2. {
+            println!("Sufficient condition '{hyperbolic:.2} <= 2' is true; Tasks ARE schedulable!'");
+            return;
+        }
+        println!("Sufficient condition '{hyperbolic:.2} <= 2' is false; Continuing'");
+    }
 
     if response_time_analysis(&tasks) {
         println!("Tasks ARE schedulable!");
@@ -41,10 +63,7 @@ fn parse_tasks(input: String) -> Vec<Task> {
             let period = split
                 .next()
                 .and_then(|s| s.parse::<f64>().ok())
-                .unwrap_or_else(|| {
-                    println!("Detected Rate Monotonic");
-                    deadline
-                });
+                .unwrap_or(deadline);
 
             let fract = computing_time.fract();
             if fract > 0. && fract < smallest {
@@ -79,6 +98,19 @@ fn parse_tasks(input: String) -> Vec<Task> {
             period: (period * base as f64) as u64,
         })
         .collect::<Vec<_>>()
+}
+
+fn utilization(tasks: &[Task]) -> f64 {
+    tasks
+        .iter()
+        .map(|t| t.computing_time as f64 / t.period as f64)
+        .sum()
+}
+
+fn hyperbolic_bound(tasks: &[Task]) -> f64 {
+    tasks.iter()
+        .map(|t| (t.computing_time as f64 / t.period as f64) + 1.)
+        .fold(1., |a, b| a * b)
 }
 
 fn response_time_analysis(tasks: &[Task]) -> bool {
