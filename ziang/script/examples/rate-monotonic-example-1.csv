@@ -1,0 +1,4 @@
+compute_time;deadline;period;priority
+1;4;4;3
+2;8;8;2
+4;16;16;1
