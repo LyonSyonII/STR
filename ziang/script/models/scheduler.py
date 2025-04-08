@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 from script.models.task import Task
-from script.utils.print import print_table
+# from script.utils.print import print_table
 from script.utils.task import hyperperiod, total_utilization, \
                               get_min_deadline, get_max_deadline, \
                               get_min_period, get_max_period, \
@@ -21,7 +21,7 @@ class Scheduler(ABC):
         :type tasks: list[Task]
         """
         self.tasks = tasks if tasks is not None else []
-        print_table(self.tasks)
+        # print_table(self.tasks)
 
     @abstractmethod
     def is_schedulable(self) -> bool:

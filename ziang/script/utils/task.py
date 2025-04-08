@@ -252,7 +252,7 @@ class ProcessorDemandCriterion:
     """
 
     @staticmethod
-    def get_l_start(tasks: list[Task]) -> float:
+    def get_l_star(tasks: list[Task]) -> float:
         """
         Get the L-start of a set of tasks.
         The L-start is the maximum period of the tasks.
@@ -263,7 +263,7 @@ class ProcessorDemandCriterion:
         """
         total = 0.0
         for task in tasks:
-            total += (task.period - task.deadline) / task.utilization
+            total += (task.period - task.deadline) * task.utilization
 
         return total / (1 - total_utilization(tasks))
 
@@ -276,7 +276,7 @@ class ProcessorDemandCriterion:
         :return: The maximum time slot of the tasks.
         :rtype: float
         """
-        return min(hyperperiod(tasks), math.ceil(ProcessorDemandCriterion.get_l_start(tasks)))
+        return min(hyperperiod(tasks), math.ceil(ProcessorDemandCriterion.get_l_star(tasks)))
 
     @staticmethod
     def get_time_slots(tasks: list[Task]) -> list[int]:
@@ -291,7 +291,7 @@ class ProcessorDemandCriterion:
             k = 0
             absolute_deadline = ProcessorDemandCriterion.get_absolute_deadline(task, k)
 
-            while absolute_deadline < max_time:
+            while absolute_deadline <= max_time:
                 time_slots.add(absolute_deadline)
                 k += 1
                 absolute_deadline = ProcessorDemandCriterion.get_absolute_deadline(task, k)
@@ -312,6 +312,39 @@ class ProcessorDemandCriterion:
         return task.period * k + task.deadline + initial_phase
 
     @staticmethod
+    def get_contribution_simplified(task: Task, l_star: float) -> float:
+        """
+        Get the contribution of a task at a given time.
+        This method uses a simplified version of the contribution calculation.
+        It only works when t1 = 0 and t2 = l_star.
+
+        :param task: The task to analyze.
+        :param l_star: The L-start of the tasks.
+        :return: The contribution of the task at the given time.
+        """
+        a = l_star + task.period - task.deadline
+        return math.floor(a/task.period) * task.compute_time
+
+    @staticmethod
+    def get_contribution(task: Task, t1: int, t2: int) -> float:
+        """
+        Get the contribution of a task at a given time.
+
+        :param task: The task to analyze.
+        :param t1: The start time.
+        :param t2: The end time.
+        :return: The contribution of the task at the given time.
+        """
+        if t1 > t2:
+            raise ValueError("t1 must be less than t2"
+                             f"\nt1: {t1}"
+                             f"\nt2: {t2}")
+
+        a = math.floor((t2 + task.period - task.deadline) / task.period)
+        b = math.ceil(t1 / task.period)
+        return max(0, a - b) * task.compute_time
+
+    @staticmethod
     def get_g(tasks: list[Task], t1: int, t2: int) -> float:
         """
         Get the g value of a task at a given time.
@@ -328,19 +361,15 @@ class ProcessorDemandCriterion:
                              f"\nt1: {t1}"
                              f"\nt2: {t2}")
 
-        l_star = ProcessorDemandCriterion.get_l_start(tasks)
+        l_star = ProcessorDemandCriterion.get_l_star(tasks)
         total = 0.0
 
         if t1 == 0 and t2 == l_star:
             for task in tasks:
-                a = l_star + task.period - task.deadline
-                total += math.floor(a/task.period) * task.compute_time
+                total += ProcessorDemandCriterion.get_contribution_simplified(task, l_star)
         else:
             for task in tasks:
-                _a = t2 + task.period - task.deadline
-                a = math.floor(_a/task.period)
-                b = math.ceil(t1/task.period)
-                total += max(0, a - b) * task.compute_time
+                total += ProcessorDemandCriterion.get_contribution(task, t1, t2)
 
         return total
 
@@ -355,5 +384,5 @@ class ProcessorDemandCriterion:
         :return: True if the g value is less than or equal to the time, False otherwise.
         :rtype: bool
         """
-        l_star = ProcessorDemandCriterion.get_l_start(tasks)
+        l_star = ProcessorDemandCriterion.get_l_star(tasks)
         return ProcessorDemandCriterion.get_g(tasks, t1, t2) <= l_star

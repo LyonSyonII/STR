@@ -31,8 +31,8 @@ class EarliestDeadlineFirstScheduler(Scheduler):
         It requires using processor on demand criterion
         """
 
-        d = ProcessorDemandCriterion.get_time_slots(self.tasks)
-        return all(ProcessorDemandCriterion.check_g(self.tasks, 0, _d) for _d in d)
+        time_slots = ProcessorDemandCriterion.get_time_slots(self.tasks)
+        return all(ProcessorDemandCriterion.check_g(self.tasks, 0, time_slot) for time_slot in time_slots)
 
     def is_schedulable(self) -> bool:
         """

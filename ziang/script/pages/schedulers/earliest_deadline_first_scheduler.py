@@ -1,8 +1,16 @@
 import streamlit as st
+import pandas as pd
+from dataclasses import dataclass
 from script.pages.utils.navigation import navigate_to
 from script.schedulers.earliest_deadline_first import EarliestDeadlineFirstScheduler
 from script.pages.utils.scheduler import show_basic_scheduler_info
 from script.utils.task import ProcessorDemandCriterion
+
+@dataclass
+class TimeSlotData:
+    time_slot: float
+    g_value: float
+    g_condition: bool
 
 def run():
     st.title("Earliest Deadline First Scheduler")
@@ -37,9 +45,11 @@ def run():
             st.error("Condition 1 is not satisfied.")
 
         for task in scheduler.tasks:
-            st.write(f"- Task ${task.task_id}$:")
-            st.write(f"    - Period: ${task.period}$")
-            st.write(f"    - Deadline: ${task.deadline}$")
+            st.write(f"""
+- Task ${task.task_id}$:
+    - Period: ${task.period}$
+    - Deadline: ${task.deadline}$
+                      """)
 
         st.write(f"Total Utilization: ${scheduler.total_utilization:.2f}$")
 
@@ -54,5 +64,28 @@ def run():
         else:
             st.error("Condition 2 is not satisfied.")
 
+        st.write(f"Hyperperiod $H$: ${scheduler.hyperperiod:.2f}$")
+
+        l_star = ProcessorDemandCriterion.get_l_star(scheduler.tasks)
+        st.write(f"$L^*$: ${l_star:.2f}$")
+
         max_time = ProcessorDemandCriterion.get_max_time_slot(scheduler.tasks)
         st.write(f"Max Time Slot: ${max_time:.2f}$")
+
+        time_slots = ProcessorDemandCriterion.get_time_slots(scheduler.tasks)
+        st.write("Time Slots:")
+        for time_slot in time_slots:
+            st.write(f"- ${time_slot:.2f}$")
+
+        time_slot_data: list[TimeSlotData] = []
+
+        for time_slot in time_slots:
+            g_value = ProcessorDemandCriterion.get_g(scheduler.tasks, 0, time_slot)
+            g_condition = ProcessorDemandCriterion.check_g(scheduler.tasks, 0, time_slot)
+            time_slot_data.append(TimeSlotData(time_slot, g_value, g_condition))
+
+        # Display the data in a table
+        df = pd.DataFrame(time_slot_data)
+        df["g_condition"] = df["g_condition"].apply(lambda x: "✅" if x else "❌")
+        df.columns = ["Time Slot", "g Value", "g Condition"]
+        st.dataframe(df, use_container_width=True)
