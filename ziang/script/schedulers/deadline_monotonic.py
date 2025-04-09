@@ -1,28 +1,12 @@
 from script.models.scheduler import Scheduler
 from script.models.task import Task
 from script.utils.task import ResponseTimeAnalysis
+from script.models.event import Event, Scheduling
 
 class DeadlineMonotonicScheduler(Scheduler):
     """
     Cyclic scheduler class.
     """
-
-    def __init__(self, tasks: list[Task], check_priority: bool = True):
-        """
-        Initialize the rate monotonic scheduler with a list of tasks.
-
-        :param tasks: List of tasks to be scheduled.
-        :param check_priority: If True, the tasks will be sorted by their period and assigned priorities.
-        :type tasks: list[Task]
-        """
-
-        if check_priority:
-            tasks.sort(key=lambda task: task.deadline)
-            total_tasks = len(tasks)
-            for i, task in enumerate(tasks):
-                task.priority = total_tasks - i
-
-        super().__init__(tasks)
 
     @property
     def utilization_bound(self) -> float:
@@ -38,3 +22,18 @@ class DeadlineMonotonicScheduler(Scheduler):
         Check if the task can be scheduled using cyclic scheduling.
         """
         return ResponseTimeAnalysis.check_response_time(self.tasks)
+
+    def sort_tasks(self):
+        self.tasks.sort(key=lambda task: task.deadline)
+        total_tasks = len(self.tasks)
+        for i, task in enumerate(self.tasks):
+            task.priority = total_tasks - i
+
+    def get_scheduling(self) -> Scheduling:
+        """
+        Get the scheduling for the tasks using cyclic scheduling.
+        """
+        if not self.is_schedulable():
+            return Scheduling(events=None)
+
+        return Scheduling()

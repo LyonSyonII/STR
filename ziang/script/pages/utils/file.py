@@ -2,6 +2,7 @@ from typing import Optional
 import pandas as pd
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from script.models.task import Task
+from script.models.scheduler import Scheduler
 
 DELIMITERS = {
     "Semicolon": ";",
@@ -35,9 +36,13 @@ def _read_task_row(row: pd.Series, task_id: Optional[int] = None) -> Task:
         task_id=task_id,
     )
 
-def read_tasks_from_df(df: pd.DataFrame) -> list[Task]:
+def read_tasks_from_df(df: pd.DataFrame, scheduler: type[Scheduler]) -> list[Task]:
     """
     Reads a DataFrame and returns a list of Task objects.
+
+    :param df: The DataFrame to read.
+    :param scheduler: The scheduler to use.
+    :return: A list of Task objects.
     """
     num_columns = df.shape[1]
 
@@ -56,15 +61,22 @@ def read_tasks_from_df(df: pd.DataFrame) -> list[Task]:
 
         tasks.append(task)
 
-    return tasks
+    new_scheduler = scheduler(tasks)
+    return new_scheduler.tasks
 
-def read_tasks(file: UploadedFile, delimiter: str = ';', has_header: bool = True) -> list[Task]:
+def read_tasks(file: UploadedFile, scheduler: type[Scheduler], delimiter: str = ';', has_header: bool = True) -> list[Task]:
     """
     Reads a CSV file and returns a list of Task objects.
+
+    :param file: The CSV file to read.
+    :param scheduler: The scheduler to use.
+    :param delimiter: The delimiter used in the CSV file.
+    :param has_header: Whether the CSV file has a header row.
+    :return: A list of Task objects.
     """
 
     if delimiter not in DELIMITERS.values():
         raise ValueError(f"Invalid delimiter: {delimiter}. Expected one of {DELIMITERS.values()}")
 
     df = pd.read_csv(file, delimiter=delimiter, header=0 if has_header else None)
-    return read_tasks_from_df(df)
+    return read_tasks_from_df(df, scheduler)

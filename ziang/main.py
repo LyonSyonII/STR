@@ -1,6 +1,6 @@
 import streamlit as st
 from script.pages import home, editor, upload
-from script.pages.schedulers import selector, cyclic_scheduler, deadline_monotonic_scheduler, earliest_deadline_first_scheduler, rate_monotonic_scheduler
+from script.pages.schedulers import cyclic_scheduler, deadline_monotonic_scheduler, earliest_deadline_first_scheduler, rate_monotonic_scheduler
 
 if "page" not in st.session_state:
     st.session_state["page"] = "home"
@@ -19,19 +19,16 @@ def main():
         case "upload":
             upload.run()
 
-        case "schedulers_selector":
-            selector.run()
-
-        case "cyclic_scheduler":
+        case "cyclic_scheduler" | "CyclicScheduler":
             cyclic_scheduler.run()
 
-        case "rate_monotonic_scheduler":
+        case "rate_monotonic_scheduler" | "RateMonotonicScheduler":
             rate_monotonic_scheduler.run()
 
-        case "deadline_monotonic_scheduler":
+        case "deadline_monotonic_scheduler" | "DeadlineMonotonicScheduler":
             deadline_monotonic_scheduler.run()
 
-        case "earliest_deadline_first_scheduler":
+        case "earliest_deadline_first_scheduler" | "EarliestDeadlineFirstScheduler":
             earliest_deadline_first_scheduler.run()
 
         case _:

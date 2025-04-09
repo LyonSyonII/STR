@@ -1,9 +1,11 @@
+from dataclasses import dataclass
 import streamlit as st
 import pandas as pd
-from dataclasses import dataclass
+import altair as alt
 from script.pages.utils.navigation import navigate_to
 from script.schedulers.earliest_deadline_first import EarliestDeadlineFirstScheduler
 from script.pages.utils.scheduler import show_basic_scheduler_info
+from script.pages.utils.chart import create_chart
 from script.utils.task import ProcessorDemandCriterion
 
 @dataclass
@@ -45,10 +47,14 @@ def run():
             st.error("Condition 1 is not satisfied.")
 
         for task in scheduler.tasks:
+            task_validity = task.period == task.deadline
+            task_status = "✅ Valid Task" if task_validity else "❌ Not Valid Task"
+
             st.write(f"""
 - Task ${task.task_id}$:
     - Period: ${task.period}$
     - Deadline: ${task.deadline}$
+    - {task_status}
                       """)
 
         st.write(f"Total Utilization: ${scheduler.total_utilization:.2f}$")
@@ -89,3 +95,24 @@ def run():
         df["g_condition"] = df["g_condition"].apply(lambda x: "✅" if x else "❌")
         df.columns = ["Time Slot", "g Value", "g Condition"]
         st.dataframe(df, use_container_width=True)
+
+    with st.expander("Example Scheduling", expanded=False):
+        st.write("#### Scheduling")
+
+        scheduling = scheduler.get_scheduling()
+        if scheduling.events is None:
+            st.error("No scheduling found.")
+            return
+
+        for event in scheduling.events:
+            st.write(f"""
+- Task ${event.task.task_id}$:
+    - Start Time: ${event.start_time}$
+    - End Time: ${event.end_time}$
+    - Compute Time: ${event.task.compute_time}$
+                      """)
+
+        additional_charts: list[alt.Chart] = []
+        # Other charts
+
+        create_chart(scheduling.events, additional_charts)

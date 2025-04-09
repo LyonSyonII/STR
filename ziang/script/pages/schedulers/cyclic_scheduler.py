@@ -1,7 +1,11 @@
+import math
 import streamlit as st
+import pandas as pd
+import altair as alt
 from script.pages.utils.navigation import navigate_to
 from script.schedulers.cyclic import CyclicScheduler
 from script.pages.utils.scheduler import show_basic_scheduler_info
+from script.pages.utils.chart import create_chart
 from script.utils.task import SecondaryPeriod
 
 def run():
@@ -31,7 +35,7 @@ def run():
         st.write("The total utilization must be less than or equal to 1.")
 
         condition1 = scheduler.condition1()
-        message = f"Total utilization is ${scheduler.total_utilization:.5f}$"
+        message = f"Total utilization is ${scheduler.total_utilization:.3f}$"
         if condition1:
             st.success(message)
         else:
@@ -46,9 +50,9 @@ def run():
             st.error("_Secondary Frame_ does not satisfy all conditions.")
 
         st.write(f"- Min deadline: ${scheduler.min_deadline}$")
-        st.write(f"- Max compute time: ${scheduler.max_compute_time:.5f}$")
+        st.write(f"- Max compute time: ${scheduler.max_compute_time:.3f}$")
 
-        ts = SecondaryPeriod.get_ts(
+        ts = SecondaryPeriod.get_time_slots(
             scheduler.tasks,
             scheduler.min_deadline,
             scheduler.max_compute_time,
@@ -62,15 +66,46 @@ def run():
             st.markdown(f"##### $T_s$ = ${_t}$")
 
             for task in scheduler.tasks:
-                condition_ts = SecondaryPeriod.compute_ts(_t, task.period)
+                condition_ts = SecondaryPeriod.compute_time_slot(_t, task.period)
                 icon_condition_ts = "✅" if condition_ts <= task.deadline else "❌"
                 k = scheduler.hyperperiod // _t
 
                 st.markdown(f"""
     - Task {task.task_id}:
-        - Compute Time: ${task.compute_time}$
+        - Compute Time: ${task.compute_time:.3f}$
         - **Deadline**: ${task.deadline}$
         - Period: ${task.period}$
         - {icon_condition_ts} $T_s$ **value** = ${condition_ts}$
         - $k$ = ${k}$
                             """)
+
+    with st.expander("Example Scheduling", expanded=False):
+        st.write("#### Scheduling")
+
+        scheduling = scheduler.get_scheduling()
+        if scheduling.events is None:
+            st.error("No scheduling found.")
+            return
+
+        st.write(f"Frame time: ${scheduling.frame_time}$")
+        st.write(f"Number of frames: ${scheduling.num_frames}$")
+
+        for event in scheduling.events:
+            st.write(f"""
+- Task ${event.task.task_id}$:
+    - Start Time: ${event.start_time}$
+    - End Time: ${event.end_time}$
+    - Compute Time: ${event.task.compute_time}$
+                      """)
+
+        additional_charts: list[alt.Chart] = []
+        if scheduling.frame_time is not None:
+            time_marks = list(range(0, math.ceil(scheduling.duration) + 1, scheduling.frame_time))
+            time_marks_df = pd.DataFrame({"Time": time_marks})
+            time_marks_chart = alt.Chart(time_marks_df).mark_rule().encode(
+                x=alt.X("Time:Q", title="Time"),
+                size=alt.value(2),
+            )
+            additional_charts.append(time_marks_chart)
+
+        create_chart(scheduling.events, additional_charts)

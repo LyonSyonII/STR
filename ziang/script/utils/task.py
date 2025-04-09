@@ -111,22 +111,22 @@ class SecondaryPeriod:
     """
 
     @staticmethod
-    def check_ts(ts: int, tasks: list[Task]) -> bool:
+    def check_time_slot(ts: int, tasks: list[Task]) -> bool:
         """
         Check if the operation with ts works
         """
-        return not any(SecondaryPeriod.compute_ts(ts, task.period) > task.deadline \
+        return not any(SecondaryPeriod.compute_time_slot(ts, task.period) > task.deadline \
                        for task in tasks)
 
     @staticmethod
-    def compute_ts(ts: int, period: int) -> int:
+    def compute_time_slot(ts: int, period: int) -> int:
         """
         Calculation for `check_ts`
         """
         return 2 * ts - math.gcd(ts, period)
 
     @staticmethod
-    def get_ts(tasks: list[Task], min_deadline: int, max_compute_time: float) -> list[int]:
+    def get_time_slots(tasks: list[Task], min_deadline: int, max_compute_time: float) -> list[int]:
         """
         Return a list of time slots between the minimum deadline and the maximum compute time.
 
@@ -140,9 +140,9 @@ class SecondaryPeriod:
             if min_deadline < max_compute_time else \
             range(math.floor(max_compute_time), min_deadline + 1)
 
-        ts = [t for t in gen if hyperperiod(tasks) % t == 0]
+        time_slots = [time_slot for time_slot in gen if hyperperiod(tasks) % time_slot == 0]
 
-        return ts
+        return time_slots
 
 
 class ResponseTimeAnalysis:

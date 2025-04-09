@@ -1,7 +1,9 @@
 import streamlit as st
+import altair as alt
 from script.pages.utils.navigation import navigate_to
 from script.schedulers.rate_monotonic import RateMonotonicScheduler
 from script.pages.utils.scheduler import show_basic_scheduler_info
+from script.pages.utils.chart import create_chart
 from script.utils.task import ResponseTimeAnalysis
 
 
@@ -15,7 +17,7 @@ def run():
         st.warning("Please add tasks first.")
         return
 
-    scheduler = RateMonotonicScheduler(tasks, check_priority=True)
+    scheduler = RateMonotonicScheduler(tasks)
     show_basic_scheduler_info(scheduler)
 
     st.write("### Rate Monotonic scheduler Info")
@@ -31,7 +33,7 @@ def run():
     with st.expander("Condition 1", expanded=False, icon=icon_condition1):
         st.write("The total utilization must be less than or equal to $n(\\sqrt[n]2 - 1)$")
         st.write(f"- $n$ = {len(scheduler.tasks)} (number of tasks)")
-        st.write(f"- Utilization bond: ${scheduler.utilization_bound:.5f}$")
+        st.write(f"- Utilization bound: ${scheduler.utilization_bound:.5f}$")
 
         condition1 = scheduler.condition1()
         message = f"Total utilization is ${scheduler.total_utilization:.5f}$"
@@ -48,7 +50,7 @@ def run():
         st.write("- $U_i$ is the utilization of task $i$")
 
         product = scheduler.get_product()
-        message = f"Product of utilizations is ${product:.5f}$"
+        message = f"Product of utilizations is ${product:.3f}$"
         if condition2:
             st.success(message)
         else:
@@ -86,10 +88,31 @@ def run():
 
             response_time = values[-1]
             icon_response_time = "✅" if response_time <= task.deadline else "❌"
-            message = f"Response time is ${response_time:.5f}$"
+            message = f"Response time is ${response_time:.3f}$"
 
             st.markdown(f"""
 - Task ${task.task_id}$ (less than or equal to ${task.deadline}$):
 {"\n".join(iteration_data)}
     - {icon_response_time} {message} (deadline is ${task.deadline}$)
                         """)
+
+    with st.expander("Example Scheduling", expanded=False):
+        st.write("#### Scheduling")
+
+        scheduling = scheduler.get_scheduling()
+        if scheduling.events is None:
+            st.error("No scheduling found.")
+            return
+
+        for event in scheduling.events:
+            st.write(f"""
+- Task ${event.task.task_id}$:
+    - Start Time: ${event.start_time}$
+    - End Time: ${event.end_time}$
+    - Compute Time: ${event.task.compute_time}$
+                      """)
+
+        additional_charts: list[alt.Chart] = []
+        # Other charts
+
+        create_chart(scheduling.events, additional_charts)

@@ -1,5 +1,7 @@
 from script.models.scheduler import Scheduler
 from script.utils.task import ProcessorDemandCriterion
+from script.models.event import Event, Scheduling
+
 
 class EarliestDeadlineFirstScheduler(Scheduler):
     """
@@ -41,3 +43,19 @@ class EarliestDeadlineFirstScheduler(Scheduler):
         :rtype: bool
         """
         return self.condition1() or self.condition2()
+
+    def sort_tasks(self) -> None:
+        """
+        Sort the tasks in the scheduler.
+        The tasks are sorted by their deadlines.
+        """
+        self.tasks.sort(key=lambda task: task.deadline)
+
+    def get_scheduling(self) -> Scheduling:
+        """
+        Get the scheduling for the tasks using earliest deadline first scheduling.
+        """
+        if not self.is_schedulable():
+            return Scheduling(events=None)
+
+        return Scheduling()

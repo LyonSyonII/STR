@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 from script.models.task import Task
+from script.models.event import Scheduling
 # from script.utils.print import print_table
 from script.utils.task import hyperperiod, total_utilization, \
                               get_min_deadline, get_max_deadline, \
@@ -14,14 +15,19 @@ class Scheduler(ABC):
 
     tasks: list[Task]
 
-    def __init__(self, tasks: Optional[list[Task]] = None):
+    def __init__(self, tasks: Optional[list[Task]] = None, sort_tasks: bool = True):
         """
         Initialize the scheduler.
+
         :param tasks: The list of tasks.
         :type tasks: list[Task]
+        :param sort_tasks: Whether to sort the tasks or not.
+        :type sort_tasks: bool
         """
         self.tasks = tasks if tasks is not None else []
-        # print_table(self.tasks)
+
+        if sort_tasks:
+            self.sort_tasks()
 
     @abstractmethod
     def is_schedulable(self) -> bool:
@@ -32,13 +38,47 @@ class Scheduler(ABC):
         :rtype: bool
         """
 
+    @abstractmethod
+    def sort_tasks(self) -> None:
+        """
+        Sort the tasks in the scheduler.
+
+        :return: None
+        :rtype: None
+        """
+
+    @abstractmethod
+    def get_scheduling(self) -> Scheduling:
+        """
+        Return a possible schedule for the tasks.
+        Returns None if the tasks cannot be scheduled.
+
+        :return: The schedule of the tasks.
+        :rtype: Optional[dict[Task, list[Event]]]
+        """
+
+    def get_task(self, task_id: int) -> Task:
+        """
+        Get a task by its ID.
+
+        :param task_id: The ID of the task.
+        :type task_id: int
+        :return: The task with the given ID.
+        :rtype: Task
+        """
+        for task in self.tasks:
+            if task.task_id == task_id:
+                return task
+
+        raise ValueError(f"Task with ID {task_id} not found.")
+
     @property
-    def hyperperiod(self) -> float:
+    def hyperperiod(self) -> int:
         """
         Calculate the hyperperiod of the tasks.
 
         :return: The hyperperiod of the tasks.
-        :rtype: float
+        :rtype: int
         """
         return hyperperiod(self.tasks)
 
