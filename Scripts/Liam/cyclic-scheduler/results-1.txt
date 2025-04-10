@@ -7,7 +7,7 @@ warning: unused import: `Float`
   = note: `#[warn(unused_imports)]` on by default
 
 warning: `cyclic-scheduler` (bin "cyclic-scheduler") generated 1 warning
-    Finished `release` profile [optimized] target(s) in 0.07s
+    Finished `release` profile [optimized] target(s) in 0.05s
      Running `target/release/cyclic-scheduler input-1.txt`
 [src/main.rs:81:5] base = 10
 [src/main.rs:9:5] &tasks = [
