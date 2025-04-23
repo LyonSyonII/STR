@@ -3,13 +3,16 @@
 #include "ArduinoJson.h"  //JSON packaging
 #include "M5StickCPlus.h"
 
-// Tenim el num 1 //
+#define PACKET_SIZE 10
+#define LISTEN_PORT 8888
 
-// char ssid[] = "WiFiAccessPointGiga_1";        // your network SSID (name)
-// char password[] = "WiFiAccessPointGiga_1";        // your network password (use for WPA, or use as key for WEP)
+char ssid[] = "iPhone de Ziang";        // your network SSID (name)
+char password[] = "3F0Q-8R5h-VcjS-pwQA";        // your network password (use for WPA, or use as key for WEP)
 // char ssid[] = "wlan_str";        // your network SSID (name)
 // char password[] = "wlan_str";        // your network password (use for WPA, or use as key for WEP)
-// IPAddress ipLocal=IPAddress(192, 168, 1, 102);//fixed ip not working...!!!
+IPAddress ipLocal=IPAddress(172, 20, 10, 100);//fixed ip not working...!!!
+WiFiUDP Udp;
+char packetBuffer[PACKET_SIZE];  // buffer to hold incoming packet
 
 struct Offsets {
     float xAccOffset;
@@ -42,12 +45,15 @@ Offsets initM5StickCPlus(void);
 Offsets IMUCalibration(void);
 
 void task1MoveMotor(const Offsets& offsets);
+void task2ControlMovement(void*);
+void task3ReadNetworkData(void*);
 void task9Debug(void*);
 
 void setup() {
     Serial.begin(115200);
     Serial.println("Init...");
-    
+
+    initWifi();
     Offsets offsets = initM5StickCPlus();
 
     xTaskCreate(
@@ -57,6 +63,24 @@ void setup() {
         &offsets,
         9,
         &task1MoveMotorHandle
+    );
+
+    xTaskCreate(
+        task2ControlMovement,
+        "task2ControlMovement",
+        configMINIMAL_STACK_SIZE*3,
+        NULL,
+        7,
+        NULL
+    );
+
+    xTaskCreate(
+        task3ReadNetworkData,
+        "task3ReadNetworkData",
+        configMINIMAL_STACK_SIZE*3,
+        NULL,
+        8,
+        NULL
     );
 
     xTaskCreate(
@@ -70,26 +94,19 @@ void setup() {
 }
 
 void loop() {
-    // tStart = millis();
-
-    // tElapsed = millis() - tStart;
-    // delayTime = (long int)(h * 1000.0f) - tElapsed;
-    // if (delayTime < 0) delayTime = 0;
-    // if (delayTime > 10) delayTime = 10;
-    // delay(delayTime);  // Periodic call
 }
 
-void task1MoveMotor(const Offsets &offsets) {    
+void task1MoveMotor(const Offsets &offsets) {
     // setup
     TickType_t lastWake = 0;
 
     // const float h = 0.010; // 10 ms
-    const float h = 0.005; // 10 ms
+    const float h = 0.005; // 5 ms
     float kp = 2.5;  // the magic gains
     float ki = 75.00;
     float kd = 25.0;
     float ku = 0.6;
-    
+
     float P = 0;  // the controller
     float I = 0;
     float D = 0;
@@ -102,24 +119,24 @@ void task1MoveMotor(const Offsets &offsets) {
         // Task: ReadSensors
         M5.Imu.getGyroData(&gX, &gY, &gZ);   // gyroscope
         M5.Imu.getAccelData(&aX, &aY, &aZ);  // accelerometer
-    
+
         auto xAcc = aX;
         auto yAcc = aY;
         auto zAcc = aZ;
         auto xGyro = gX - offsets.xGyroOffset;
         auto yGyro = gY - offsets.yGyroOffset;
         auto zGyro = gZ - offsets.zGyroOffset;
-        // -xGyro*M5.IMU.gRes 
+        // -xGyro*M5.IMU.gRes
         // M5.IMU.gRes=0.01 https://docs.m5stack.switch-science.com/en/arduino/m5stickc/sh200q_m5stickc degrees per
         // second. TODO: check it
         auto xOmega = -xGyro * 0.01;
-    
+
         auto roll = -360.0 / 6.28 * atan2(-xAcc, zAcc);
         auto pitch = 360.0 / 6.28 * atan2(yAcc, zAcc);
         // low pass filter + complementary filter (handmade). TODO: double check it!
         pitch_filtered = 0.993 * (pitch_filtered + xGyro * h) + (1.0 - 0.993) * (pitch);
-    
-        r = rZero;
+
+        // r = rZero;
         error = r - pitch_filtered;
         P = kp * error;
         I = I + ki * h * error;
@@ -127,37 +144,75 @@ void task1MoveMotor(const Offsets &offsets) {
         if (I < -100) I = -100;
         D = kd * xOmega;
         u = P + I + D + ku * u;
-    
+
         // if the error is big, do nothing since the segway has fallen
         if (abs(error) > 70) {
             u = 0;
         }
         // check for saturation
-        if (u > 127) u = 127;  
+        if (u > 127) u = 127;
         if (u < -127) u = -127;
-    
+
         // send data to motors
         Wire.beginTransmission(0x38);
-        // channel left  
-        Wire.write(0);                 
+        // channel left
+        Wire.write(0);
         Wire.write((int)(-u));
         Wire.endTransmission();
         Wire.beginTransmission(0x38);
         // channel right
-        Wire.write(1);  
+        Wire.write(1);
         Wire.write((int)(u));
         Wire.endTransmission();
-        
+
         // long end = millis();
         // Serial.printf("task1 took %lu ms\n", end - start);
-        
+
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(h * 1000));
+    }
+}
+
+void task2ControlMovement(void*) {
+    r = rZero;  // reference pitch angle
+
+    while (1) {
+        const char control = packetBuffer[0];
+
+        switch (control) {
+            // 'f' for forward
+            case 'f':
+                r = rZero + 5;
+                break;
+
+            // 'b' for backward
+            case 'b':
+                r = rZero - 5;
+                break;
+
+            default:
+                r = rZero;
+                break;
+        }
+    }
+}
+
+// https://www.aranacorp.com/en/communication-between-two-esp32s-via-udp/
+void task3ReadNetworkData(void*) {
+    while (1) {
+        const int packetSize = Udp.parsePacket();
+        const int len = Udp.read(packetBuffer, PACKET_SIZE);
+
+        if (len > 0) {
+            packetBuffer[len - 1] = 0;
+        }
+
+        Udp.endPacket();
     }
 }
 
 void task9Debug(void*) {
     TickType_t lastWake = 0;
-    while (1) {        
+    while (1) {
         vBatt = M5.Axp.GetBatVoltage();
         M5.Lcd.setCursor(0, 10);
         M5.Lcd.printf("v=%5.2fV   ", vBatt);
@@ -249,31 +304,30 @@ Offsets initM5StickCPlus(void) {
 }
 
 void initWifi(void) {
-    // // M5.Lcd.setCursor(0, 190);
-    // M5.Lcd.setCursor(0, 0);
-    // M5.Lcd.printf("Connecting...");
-    // WiFi.mode(WIFI_STA);
-    // WiFi.begin(ssid, password);
-    // while (WiFi.waitForConnectResult() != WL_CONNECTED)
-    // {
-    //   Serial.println("Connection Failed! Rebooting...");
-    //   delay(500);
-    //   // M5.Lcd.setCursor(0, 190);
-    //   M5.Lcd.setCursor(0, 190);
-    //   M5.Lcd.printf("Rebooting... ");
-    //   ESP.restart();
-    // }
-    // Serial.println("Ready");
-    // Serial.print("IP address: ");
+    // M5.Lcd.setCursor(0, 190);
+    M5.Lcd.setCursor(0, 0);
+    M5.Lcd.printf("Connecting...");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+        Serial.println("Connection Failed! Rebooting...");
+        delay(500);
+        // M5.Lcd.setCursor(0, 190);
+        M5.Lcd.setCursor(0, 190);
+        M5.Lcd.printf("Rebooting... ");
+        ESP.restart();
+    }
+    Serial.println("Ready");
+    Serial.print("IP address: ");
 
-    // ipLocal=WiFi.localIP();
-    // Serial.println(ipLocal);
-    // // M5.Lcd.setCursor(0, 190);
-    // M5.Lcd.setCursor(0, 0);
-    // M5.Lcd.printf("%d.%d.%d.%d",ipLocal[0],ipLocal[1],ipLocal[2],ipLocal[3]);
-    // M5.Lcd.setRotation(2);
-    // delay(100);
-    // Udp.begin(8888);
+    ipLocal = WiFi.localIP();
+    Serial.println(ipLocal);
+    // M5.Lcd.setCursor(0, 190);
+    M5.Lcd.setCursor(0, 0);
+    M5.Lcd.printf("%d.%d.%d.%d",ipLocal[0],ipLocal[1],ipLocal[2],ipLocal[3]);
+    M5.Lcd.setRotation(2);
+    delay(100);
+    Udp.begin(LISTEN_PORT);
 }
 
 
