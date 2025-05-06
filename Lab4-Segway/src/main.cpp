@@ -23,10 +23,8 @@ struct Offsets {
 TaskHandle_t task1MoveMotorHandle;
 TaskHandle_t task9DebugHandle;
 
-const float rZero = -99.75;  // reference pitch angle
-float r = rZero;             // variable to deal with varying reference
-float error;
-float error_k_1 = 0;
+float rZero = -99.75;  // reference pitch angle
+float r = rZero;
 float gX = 0;  // gyro data
 float gY = 0;
 float gZ = 0;
@@ -119,8 +117,8 @@ void task1MoveMotor(const Offsets &offsets) {
         // low pass filter + complementary filter (handmade). TODO: double check it!
         pitch_filtered = 0.993 * (pitch_filtered + xGyro * h) + (1.0 - 0.993) * (pitch);
     
-        r = rZero;
-        error = r - pitch_filtered;
+        auto r = rZero;
+        auto error = r - pitch_filtered;
         P = kp * error;
         I = I + ki * h * error;
         if (I > 100) I = 100;
@@ -133,8 +131,11 @@ void task1MoveMotor(const Offsets &offsets) {
             u = 0;
         }
         // check for saturation
-        if (u > 127) u = 127;  
-        if (u < -127) u = -127;
+        /if (u > 127) u = 127;  
+        /if (u < -127) u = -127;
+        // check for saturation
+        // if (u > 60) u = 60;  
+        // if (u < -60) u = -60;
     
         // send data to motors
         Wire.beginTransmission(0x38);
@@ -182,7 +183,7 @@ void task9Debug(void*) {
 Offsets IMUCalibration(void) {
     Offsets offsets;
 
-    unsigned int calibrationIter = 10000;
+    unsigned int calibrationIter = 100;
     M5.Lcd.fillScreen(BLACK);
     Serial.println("Calibrating IMU... do not move the IMU");
     M5.Lcd.println("Cal.");
