@@ -7,9 +7,9 @@
 
 // char ssid[] = "WiFiAccessPointGiga_1";        // your network SSID (name)
 // char password[] = "WiFiAccessPointGiga_1";        // your network password (use for WPA, or use as key for WEP)
-// char ssid[] = "wlan_str";        // your network SSID (name)
-// char password[] = "wlan_str";        // your network password (use for WPA, or use as key for WEP)
-// IPAddress ipLocal=IPAddress(192, 168, 1, 102);//fixed ip not working...!!!
+char ssid[] = "patata";       // your network SSID (name)
+char password[] = "patata1234";        // your network password (use for WPA, or use as key for WEP)
+WiFiUDP Udp;
 
 struct Offsets {
     float xAccOffset;
@@ -23,7 +23,10 @@ struct Offsets {
 TaskHandle_t task1MoveMotorHandle;
 TaskHandle_t task9DebugHandle;
 
-float rZero = -99.75;  // reference pitch angle
+// float rZero = -99.75;  // reference pitch angle
+// float rZero = -103.85;  // reference pitch angle
+// float rZero = -102.15;  // reference pitch angle
+float rZero = -101.75;  // reference pitch angle
 float r = rZero;
 float gX = 0;  // gyro data
 float gY = 0;
@@ -80,8 +83,8 @@ void loop() {
 void task1MoveMotor(const Offsets &offsets) {    
     // setup
     TickType_t lastWake = 0;
-
-    const float h = 0.010; // 10 ms
+    
+    const float h = 0.004; // 4 ms
     float kp = 2.5;  // the magic gains
     float ki = 75.00;
     float kd = 25.0;
@@ -161,7 +164,7 @@ void task9Debug(void*) {
         M5.Lcd.setCursor(0, 40);
         M5.Lcd.printf("r=%5.2f   ", r);
         M5.Lcd.setCursor(0, 70);
-        M5.Lcd.printf("pitch=%d   ", (int)pitch_filtered);
+        M5.Lcd.printf("pitch=%.2f   ", pitch_filtered);
 
         Serial.println("OSC");
         Serial.print((float)vBatt);
@@ -170,6 +173,13 @@ void task9Debug(void*) {
         Serial.print(",");
         Serial.print((float)pitch_filtered);
         Serial.println();
+
+        if (Udp.available()) {
+            Udp.parsePacket();
+            char buffer[12];
+            Udp.read(buffer, 12);
+            Serial.printf("Received %s\n", buffer);
+        }
 
         xTaskDelayUntil(&lastWake, pdMS_TO_TICKS(200));
     }
@@ -238,7 +248,7 @@ Offsets initM5StickCPlus(void) {
     M5.Imu.SetGyroFsr(M5.Imu.GFS_250DPS);  // 250DPS 500DPS 1000DPS 2000DPS
     M5.Imu.SetAccelFsr(M5.Imu.AFS_4G);     // 2G 4G 8G 16G
 
-    // initWifi();
+    initWifi();
 
     Offsets ret = IMUCalibration();
     M5.Lcd.fillScreen(BLACK);
@@ -246,31 +256,33 @@ Offsets initM5StickCPlus(void) {
 }
 
 void initWifi(void) {
-    // // M5.Lcd.setCursor(0, 190);
-    // M5.Lcd.setCursor(0, 0);
-    // M5.Lcd.printf("Connecting...");
-    // WiFi.mode(WIFI_STA);
-    // WiFi.begin(ssid, password);
-    // while (WiFi.waitForConnectResult() != WL_CONNECTED)
-    // {
-    //   Serial.println("Connection Failed! Rebooting...");
-    //   delay(500);
-    //   // M5.Lcd.setCursor(0, 190);
-    //   M5.Lcd.setCursor(0, 190);
-    //   M5.Lcd.printf("Rebooting... ");
-    //   ESP.restart();
-    // }
-    // Serial.println("Ready");
-    // Serial.print("IP address: ");
+    M5.Lcd.setCursor(0, 190);
+    M5.Lcd.setCursor(0, 0);
+    M5.Lcd.printf("Connecting...");
+    WiFi.mode(WIFI_STA);
+    // WiFi.config(ipLocal, IPAddress(0, 0, 0, 0), IPAddress(0, 0, 0, 0));
+    WiFi.begin(ssid, password);
+    while (WiFi.waitForConnectResult() != WL_CONNECTED)
+    {
+      Serial.println("Connection Failed! Rebooting...");
+      delay(500);
+      M5.Lcd.setCursor(0, 190);
+      M5.Lcd.setCursor(0, 190);
+      M5.Lcd.printf("Rebooting... ");
+      ESP.restart();
+    }
+    Serial.println("Ready");
+    Serial.print("IP address: ");
 
-    // ipLocal=WiFi.localIP();
-    // Serial.println(ipLocal);
-    // // M5.Lcd.setCursor(0, 190);
-    // M5.Lcd.setCursor(0, 0);
-    // M5.Lcd.printf("%d.%d.%d.%d",ipLocal[0],ipLocal[1],ipLocal[2],ipLocal[3]);
-    // M5.Lcd.setRotation(2);
-    // delay(100);
-    // Udp.begin(8888);
+    auto ipLocal=WiFi.localIP();
+    Serial.println(ipLocal);
+    M5.Lcd.setCursor(0, 190);
+    M5.Lcd.setCursor(0, 0);
+    M5.Lcd.printf("%d.%d.%d.%d",ipLocal[0],ipLocal[1],ipLocal[2],ipLocal[3]);
+    M5.Lcd.setRotation(2);
+    delay(100);
+    Udp.begin(8888);
+    Udp.flush();
 }
 
 
