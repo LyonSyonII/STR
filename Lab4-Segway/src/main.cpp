@@ -11,6 +11,7 @@ char ssid[] = "patata";       // your network SSID (name)
 char password[] = "patata1234";        // your network password (use for WPA, or use as key for WEP)
 WiFiUDP Udp;
 IPAddress ipLocal;
+char moveMode = 'f';
 
 struct Offsets {
     float xAccOffset;
@@ -72,25 +73,17 @@ void setup() {
         &task2ReceiveUDPHandle
     );
 
-/*     xTaskCreate(
+    xTaskCreate(
         task9Debug,
         "task9Debug",
         configMINIMAL_STACK_SIZE*3,
         NULL,
         1,
         &task9DebugHandle
-    ); */
+    );
 }
 
-void loop() {
-    // tStart = millis();
-
-    // tElapsed = millis() - tStart;
-    // delayTime = (long int)(h * 1000.0f) - tElapsed;
-    // if (delayTime < 0) delayTime = 0;
-    // if (delayTime > 10) delayTime = 10;
-    // delay(delayTime);  // Periodic call
-}
+void loop() {}
 
 // C = 4ms
 void task1MoveMotor(const Offsets &offsets) {    
@@ -99,9 +92,13 @@ void task1MoveMotor(const Offsets &offsets) {
     
     const float h = 0.01; // 10 ms
     float kp = 2.5;  // the magic gains
+    float ki = 25.;
+    float kd = 25.;
+    float ku = 0.6;
+/*     float kp = 2.5;  // the magic gains
     float ki = 75.00;
     float kd = 25.0;
-    float ku = 0.6;
+    float ku = 0.6; */
     
     float P = 0;  // the controller
     float I = 0;
@@ -132,7 +129,6 @@ void task1MoveMotor(const Offsets &offsets) {
         // low pass filter + complementary filter (handmade). TODO: double check it!
         pitch_filtered = 0.993 * (pitch_filtered + xGyro * h) + (1.0 - 0.993) * (pitch);
     
-        float r = rZero;
         float error = r - pitch_filtered;
         P = kp * error;
         I = I + ki * h * error;
@@ -150,15 +146,15 @@ void task1MoveMotor(const Offsets &offsets) {
         if (u < -127) u = -127;
     
         // send data to motors
-        Wire.beginTransmission(0x38);
         // channel left  
-        Wire.write(0);                 
-        Wire.write((int)(-u));
-        Wire.endTransmission();
         Wire.beginTransmission(0x38);
+        Wire.write(0);                 
+        Wire.write(moveMode != 'r' ? (int)(-u) : (int)(-u * .6));
+        Wire.endTransmission();
         // channel right
+        Wire.beginTransmission(0x38);
         Wire.write(1);  
-        Wire.write((int)(u));
+        Wire.write(moveMode != 'l' ? (int)(u) : (int)(-u * .6));
         Wire.endTransmission();
         
         // long end = millis();
@@ -178,10 +174,14 @@ void task2ReceiveUDP(void*) {
         if (packet_available) {
             signed char cmd;
             Udp.read((char*)&cmd, 1);
-            if (cmd > 0) {
-                Serial.printf("Received %c\n", cmd);
-            } else {
+            
+            if (cmd < 0) {
+                r = cmd == -1 ? rZero : cmd;
+                // pitch_filtered = r;
                 Serial.printf("Received %d\n", (int)cmd);
+            } else {
+                moveMode = cmd;
+                Serial.printf("Received %c\n", cmd);
             }
             // long end = millis();
             // Serial.printf("task2 took %lu ms\n", end - start);
@@ -204,13 +204,13 @@ void task9Debug(void*) {
         M5.Lcd.setCursor(0, 190);
         // M5.Lcd.printf("%d.%d.%d.%d",ipLocal[0],ipLocal[1],ipLocal[2],ipLocal[3]);
 
-        Serial.println("OSC");
+/*         Serial.println("OSC");
         Serial.print((float)vBatt);
         Serial.print(",");
         Serial.print((float)r);
         Serial.print(",");
         Serial.print((float)pitch_filtered);
-        Serial.println();
+        Serial.println(); */
 
         xTaskDelayUntil(&lastWake, pdMS_TO_TICKS(200));
     }
