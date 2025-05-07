@@ -23,10 +23,8 @@ struct Offsets {
 TaskHandle_t task1MoveMotorHandle;
 TaskHandle_t task9DebugHandle;
 
-const float rZero = -99.75;  // reference pitch angle
-float r = rZero;             // variable to deal with varying reference
-float error;
-float error_k_1 = 0;
+float rZero = -99.75;  // reference pitch angle
+float r = rZero;
 float gX = 0;  // gyro data
 float gY = 0;
 float gZ = 0;
@@ -83,8 +81,7 @@ void task1MoveMotor(const Offsets &offsets) {
     // setup
     TickType_t lastWake = 0;
 
-    // const float h = 0.010; // 10 ms
-    const float h = 0.005; // 10 ms
+    const float h = 0.010; // 10 ms
     float kp = 2.5;  // the magic gains
     float ki = 75.00;
     float kd = 25.0;
@@ -103,24 +100,24 @@ void task1MoveMotor(const Offsets &offsets) {
         M5.Imu.getGyroData(&gX, &gY, &gZ);   // gyroscope
         M5.Imu.getAccelData(&aX, &aY, &aZ);  // accelerometer
     
-        auto xAcc = aX;
-        auto yAcc = aY;
-        auto zAcc = aZ;
-        auto xGyro = gX - offsets.xGyroOffset;
-        auto yGyro = gY - offsets.yGyroOffset;
-        auto zGyro = gZ - offsets.zGyroOffset;
+        float xAcc = aX;
+        float yAcc = aY;
+        float zAcc = aZ;
+        float xGyro = gX - offsets.xGyroOffset;
+        float yGyro = gY - offsets.yGyroOffset;
+        float zGyro = gZ - offsets.zGyroOffset;
         // -xGyro*M5.IMU.gRes 
         // M5.IMU.gRes=0.01 https://docs.m5stack.switch-science.com/en/arduino/m5stickc/sh200q_m5stickc degrees per
         // second. TODO: check it
-        auto xOmega = -xGyro * 0.01;
+        float xOmega = -xGyro * 0.01;
     
-        auto roll = -360.0 / 6.28 * atan2(-xAcc, zAcc);
-        auto pitch = 360.0 / 6.28 * atan2(yAcc, zAcc);
+        float roll = -360.0 / 6.28 * atan2(-xAcc, zAcc);
+        float pitch = 360.0 / 6.28 * atan2(yAcc, zAcc);
         // low pass filter + complementary filter (handmade). TODO: double check it!
         pitch_filtered = 0.993 * (pitch_filtered + xGyro * h) + (1.0 - 0.993) * (pitch);
     
-        r = rZero;
-        error = r - pitch_filtered;
+        float r = rZero;
+        float error = r - pitch_filtered;
         P = kp * error;
         I = I + ki * h * error;
         if (I > 100) I = 100;
@@ -129,7 +126,7 @@ void task1MoveMotor(const Offsets &offsets) {
         u = P + I + D + ku * u;
     
         // if the error is big, do nothing since the segway has fallen
-        if (abs(error) > 70) {
+        if (abs(error) > 30) {
             u = 0;
         }
         // check for saturation
@@ -151,7 +148,7 @@ void task1MoveMotor(const Offsets &offsets) {
         // long end = millis();
         // Serial.printf("task1 took %lu ms\n", end - start);
         
-        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(h * 1000));
+        vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(h * 1000.0f));
     }
 }
 
@@ -182,7 +179,7 @@ void task9Debug(void*) {
 Offsets IMUCalibration(void) {
     Offsets offsets;
 
-    unsigned int calibrationIter = 10000;
+    const unsigned int calibrationIter = 100;
     M5.Lcd.fillScreen(BLACK);
     Serial.println("Calibrating IMU... do not move the IMU");
     M5.Lcd.println("Cal.");
