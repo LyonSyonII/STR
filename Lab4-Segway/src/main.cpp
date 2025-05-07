@@ -91,14 +91,14 @@ void task1MoveMotor(const Offsets &offsets) {
     TickType_t lastWake = 0;
     
     const float h = 0.01; // 10 ms
-    float kp = 2.5;  // the magic gains
+/*     float kp = 2.5;  // the magic gains
     float ki = 25.;
     float kd = 25.;
-    float ku = 0.6;
-/*     float kp = 2.5;  // the magic gains
+    float ku = 0.6; */
+    float kp = 2.5;  // the magic gains
     float ki = 75.00;
     float kd = 25.0;
-    float ku = 0.6; */
+    float ku = 0.6;
     
     float P = 0;  // the controller
     float I = 0;
@@ -178,10 +178,13 @@ void task2ReceiveUDP(void*) {
             if (cmd < 0) {
                 r = cmd == -1 ? rZero : cmd;
                 // pitch_filtered = r;
-                Serial.printf("Received %d\n", (int)cmd);
+                Serial.printf("%d\n", (int)cmd);
+                // Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
+                // Udp.write(cmd);
+                // Udp.endPacket();
             } else {
                 moveMode = cmd;
-                Serial.printf("Received %c\n", cmd);
+                Serial.printf("%c\n", cmd);
             }
             // long end = millis();
             // Serial.printf("task2 took %lu ms\n", end - start);
