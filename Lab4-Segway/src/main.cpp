@@ -7,7 +7,7 @@
 
 // char ssid[] = "WiFiAccessPointGiga_1";        // your network SSID (name)
 // char password[] = "WiFiAccessPointGiga_1";        // your network password (use for WPA, or use as key for WEP)
-char ssid[] = "patata";       // your network SSID (name)
+char ssid[] = "patata1234";       // your network SSID (name)
 char password[] = "patata1234";        // your network password (use for WPA, or use as key for WEP)
 WiFiUDP Udp;
 IPAddress ipLocal;
@@ -28,8 +28,8 @@ TaskHandle_t task9DebugHandle;
 
 // float rZero = -99.75;  // reference pitch angle
 // float rZero = -103.85;  // reference pitch angle
-// float rZero = -102.15;  // reference pitch angle
-float rZero = -101.75;  // reference pitch angle
+float rZero = -102.15;  // reference pitch angle
+// float rZero = -101.75;  // reference pitch angle
 float r = rZero;
 float gX = 0;  // gyro data
 float gY = 0;
@@ -179,12 +179,11 @@ void task2ReceiveUDP(void*) {
             Udp.read((char*)&cmd, 1);
             
             if (cmd < 0) {
-                r = cmd == -1 ? rZero : cmd;
+                const float step = 5.;
+                const float range = 4.;
+                r = (rZero - step * range) + step * (abs(cmd) - 1.);
+                // -1, -2, -3, -4, rZero, -6, -7, -8, -9
                 Serial.printf("%d\n", (int)cmd);
-                // pitch_filtered = r;
-                // Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
-                // Udp.write(cmd);
-                // Udp.endPacket();
             } else {
                 moveMode = cmd;
                 Serial.printf("%c\n", cmd);
