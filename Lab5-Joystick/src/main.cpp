@@ -367,7 +367,8 @@ void tftTask(void) {
         uint64_t elapsed = Kernel::get_ms_count() - start;
         if (elapsed > worst_exec_time) { 
             worst_exec_time = elapsed;
-            printf("tftTask took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
+            Serial.print("tftTask took "); 
+            Serial.println(worst_exec_time);
         }
         
         ThisThread::sleep_until(start + 100);
