@@ -89,12 +89,9 @@ void loop() {}
 void task1MoveMotor(const Offsets &offsets) {    
     // setup
     TickType_t lastWake = 0;
+    // long worst_exec_time = 0;
     
     const float h = 0.01; // 10 ms
-/*     float kp = 2.5;  // the magic gains
-    float ki = 25.;
-    float kd = 25.;
-    float ku = 0.6; */
     float kp = 2.5;  // the magic gains
     float ki = 75.00;
     float kd = 25.0;
@@ -105,7 +102,6 @@ void task1MoveMotor(const Offsets &offsets) {
     float D = 0;
     float u = 0;
 
-    // loop
     while (1) {
         // long start = millis();
 
@@ -157,8 +153,11 @@ void task1MoveMotor(const Offsets &offsets) {
         Wire.write(moveMode != 'l' ? (int)(u) : (int)(-u * .6));
         Wire.endTransmission();
         
-        // long end = millis();
-        // Serial.printf("task1 took %lu ms\n", end - start);
+        // auto elapsed = millis() - start;
+        // if (elapsed > worst_exec_time) { 
+        //     worst_exec_time = elapsed;
+        //     printf("task1 took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
+        // }
         
         vTaskDelayUntil(&lastWake, pdMS_TO_TICKS(h * 1000.0f));
     }
@@ -167,18 +166,20 @@ void task1MoveMotor(const Offsets &offsets) {
 // C = 2ms
 void task2ReceiveUDP(void*) {
     TickType_t lastWake = 0;
+    // long worst_exec_time = 0;
+
     while (1) {
         // long start = millis();
-        int packet_available = Udp.parsePacket();
-        // Serial.printf("Checking Udp: %d\n", packet_available);
+
+        int packet_available = Udp.parsePacket(); // Serial.printf("Checking Udp: %d\n", packet_available);
         if (packet_available) {
             signed char cmd;
             Udp.read((char*)&cmd, 1);
             
             if (cmd < 0) {
                 r = cmd == -1 ? rZero : cmd;
-                // pitch_filtered = r;
                 Serial.printf("%d\n", (int)cmd);
+                // pitch_filtered = r;
                 // Udp.beginPacket(Udp.remoteIP(), Udp.remotePort());
                 // Udp.write(cmd);
                 // Udp.endPacket();
@@ -186,17 +187,25 @@ void task2ReceiveUDP(void*) {
                 moveMode = cmd;
                 Serial.printf("%c\n", cmd);
             }
-            // long end = millis();
-            // Serial.printf("task2 took %lu ms\n", end - start);
         }
+
+        // auto elapsed = millis() - start;
+        // if (elapsed > worst_exec_time) { 
+        //     worst_exec_time = elapsed;
+        //     printf("task2 took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
+        // }
 
         xTaskDelayUntil(&lastWake, pdMS_TO_TICKS(5));
     }
 }
 
+// C = 104ms
 void task9Debug(void*) {
     TickType_t lastWake = 0;
+    long worst_exec_time = 0;
+
     while (1) {        
+        long start = millis();
         vBatt = M5.Axp.GetBatVoltage();
         M5.Lcd.setCursor(0, 10);
         M5.Lcd.printf("v=%5.2fV   ", vBatt);
@@ -207,13 +216,13 @@ void task9Debug(void*) {
         M5.Lcd.setCursor(0, 190);
         // M5.Lcd.printf("%d.%d.%d.%d",ipLocal[0],ipLocal[1],ipLocal[2],ipLocal[3]);
 
-/*         Serial.println("OSC");
-        Serial.print((float)vBatt);
-        Serial.print(",");
-        Serial.print((float)r);
-        Serial.print(",");
-        Serial.print((float)pitch_filtered);
-        Serial.println(); */
+        Serial.printf("OSC\n%.2f,%.2f,%.2f\n", vBatt, r, pitch_filtered);
+
+        // auto elapsed = millis() - start;
+        // if (elapsed > worst_exec_time) { 
+        //     worst_exec_time = elapsed;
+        //     printf("task9 took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
+        // }
 
         xTaskDelayUntil(&lastWake, pdMS_TO_TICKS(200));
     }
