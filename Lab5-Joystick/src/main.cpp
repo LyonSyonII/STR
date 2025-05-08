@@ -129,39 +129,6 @@ void setup() {
 void loop() {}
 
 signed char getCommand() {
-    // Serial.print("Current JoystickAnalogY: ");
-    // Serial.println(JoystickAnalogY);
-
-    // Serial.print("Current y value: ");
-    // Serial.println(y);
-
-    // Serial.print("Current JoystickAnalogX: ");
-    // Serial.println(JoystickAnalogX);
-
-    // Serial.print("Current x value: ");
-    // Serial.println(x);
-
-    // Serial.print("Current ButtonAState: ");
-    // Serial.println(ButtonAState);
-
-    // Serial.print("Current ButtonBState: ");
-    // Serial.println(ButtonBState);
-
-    // Serial.print("Deadband: ");
-    // Serial.println(joystickDeadband);
-
-    // Serial.print("Current Button A State: ");
-    // Serial.println(ButtonAState);
-
-    // Serial.print("Current Button B State: ");
-    // Serial.println(ButtonBState);
-
-    // Serial.print("Current Button C State: ");
-    // Serial.println(ButtonCState);
-
-    // Serial.print("Current Button D State: ");
-    // Serial.println(ButtonDState);
-
     shouldSendCommand = false;
 
     if (ButtonCState == LOW && lastButtonCState == HIGH) {
@@ -485,13 +452,13 @@ void supervisionTask(void) {
     while (true) {
         const uint64_t lastWakeTime = Kernel::get_ms_count();
         printMutex.lock();
-        // Serial.println("OSC");
-        // Serial.print(Temp);
-        // Serial.print(",");
-        // Serial.print(pitch);
-        // Serial.print(",");
-        // Serial.print(roll);
-        // Serial.println(" ");
+        Serial.println("OSC");
+        Serial.print(Temp);
+        Serial.print(",");
+        Serial.print(pitch);
+        Serial.print(",");
+        Serial.print(roll);
+        Serial.println(" ");
         printMutex.unlock();
         ThisThread::sleep_until(lastWakeTime + 200);
     }
