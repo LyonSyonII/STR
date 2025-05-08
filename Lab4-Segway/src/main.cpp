@@ -200,6 +200,17 @@ void task2ReceiveUDP(void*) {
     }
 }
 
+/*
+
+// uint64_t worst_exec_time = 0;
+const uint64_t start = Kernel::get_ms_count();
+// uint64_t elapsed = Kernel::get_ms_count() - start;
+// if (elapsed > worst_exec_time) { 
+//     worst_exec_time = elapsed;
+//     printf("task2 took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
+// }
+*/
+
 // C = 104ms
 // T = 200ms
 void task9Debug(void*) {

@@ -154,12 +154,21 @@ signed char getCommand() {
 }
 
 void joystickTask(void) {
+    // uint64_t worst_exec_time = 0;
+
     while (true) {
-        const uint64_t lastWakeTime = Kernel::get_ms_count();
+        const uint64_t start = Kernel::get_ms_count();
         joystickGetData();
         const signed char command = getCommand();
         sendCommand(command);
-        ThisThread::sleep_until(lastWakeTime + 10);
+        
+        // uint64_t elapsed = Kernel::get_ms_count() - start;
+        // if (elapsed > worst_exec_time) { 
+        //     worst_exec_time = elapsed;
+        //     printf("joystickTask took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
+        // }
+        
+        ThisThread::sleep_until(start + 10);
     }
 }
 
@@ -280,8 +289,11 @@ void tftInit(void) {
 }
 
 void tftTask(void) {
+    uint64_t worst_exec_time = 0;
+
     while (true) {
-        const uint64_t lastWakeTime = Kernel::get_ms_count();
+        const uint64_t start = Kernel::get_ms_count();
+
         tft.setCursor(30, 80);
         tft.print(speedCounter);
 
@@ -352,7 +364,13 @@ void tftTask(void) {
             tft.drawTriangle(87, 154, 84, 149, 90, 149, 0xd0a0);
         }
 
-        ThisThread::sleep_until(lastWakeTime + 100);
+        uint64_t elapsed = Kernel::get_ms_count() - start;
+        if (elapsed > worst_exec_time) { 
+            worst_exec_time = elapsed;
+            printf("tftTask took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
+        }
+        
+        ThisThread::sleep_until(start + 100);
     }
 }
 
@@ -449,8 +467,10 @@ void joystickGetData(void) {
 }
 
 void supervisionTask(void) {
+    uint64_t worst_exec_task = 0;
+
     while (true) {
-        const uint64_t lastWakeTime = Kernel::get_ms_count();
+        const uint64_t start = Kernel::get_ms_count();
         printMutex.lock();
         Serial.println("OSC");
         Serial.print(Temp);
@@ -460,6 +480,13 @@ void supervisionTask(void) {
         Serial.print(roll);
         Serial.println(" ");
         printMutex.unlock();
-        ThisThread::sleep_until(lastWakeTime + 200);
+
+        // uint64_t elapsed = Kernel::get_ms_count() - start;
+        // if (elapsed > worst_exec_time) { 
+        //     worst_exec_time = elapsed;
+        //     printf("task2 took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
+        // }
+
+        ThisThread::sleep_until(start + 200);
     }
 }
