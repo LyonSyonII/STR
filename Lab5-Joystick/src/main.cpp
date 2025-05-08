@@ -92,7 +92,7 @@ Thread tftThread(osPriorityNormal);
 void tftInit(void);
 void tftTask(void);
 
-// Thread joystickThread(osPriorityRealtime7);
+Thread joystickThread(osPriorityRealtime7);
 void joystickInit(void);
 void joystickTask(void);
 void joystickGetData(void);
@@ -101,8 +101,8 @@ void sendCommand(uint8_t command);
 Thread supervisionThread(osPriorityLow);
 void supervisionTask(void);
 
-Thread receiveDataThread(osPriorityRealtime7);
-void receiveDataTask(void);
+// Thread receiveDataThread(osPriorityRealtime7);
+// void receiveDataTask(void);
 
 void setup() {
     Serial.begin(115200);
@@ -112,41 +112,41 @@ void setup() {
     tftInit();
     joystickInit();
 
-    // ckThread.start(joystickTask);
+    joystickThread.start(joystickTask);
     supervisionThread.start(supervisionTask);
     tftThread.start(tftTask);
-    receiveDataThread.start(receiveDataTask);
+    // receiveDataThread.start(receiveDataTask);
 }
 
 void loop() {}
 
-void receiveDataTask() {
-    while (true) {
-        const uint64_t lastWakeTime = Kernel::get_ms_count();
+// void receiveDataTask() {
+//     while (true) {
+//         const uint64_t lastWakeTime = Kernel::get_ms_count();
 
-        int packetSize = Udp.parsePacket();
+//         int packetSize = Udp.parsePacket();
 
-        if (packetSize) {
-            Serial.print("Received data from ");
-            Serial.print(Udp.remoteIP());
-            Serial.print(":");
-            Serial.print(Udp.remotePort());
-            Serial.println();
-            Serial.print("Received packet of size ");
-            Serial.println(packetSize);
-            char packetBuffer[255];
-            int len = Udp.read(packetBuffer, 255);
-            if (len > 0) {
-                packetBuffer[len] = 0;
-            }
-            Serial.print("Contents: ");
-            Serial.println(packetBuffer);
-        }
-        else {
-            Serial.println("No packet received");
-        }
-    }
-}
+//         if (packetSize) {
+//             Serial.print("Received data from ");
+//             Serial.print(Udp.remoteIP());
+//             Serial.print(":");
+//             Serial.print(Udp.remotePort());
+//             Serial.println();
+//             Serial.print("Received packet of size ");
+//             Serial.println(packetSize);
+//             char packetBuffer[255];
+//             int len = Udp.read(packetBuffer, 255);
+//             if (len > 0) {
+//                 packetBuffer[len] = 0;
+//             }
+//             Serial.print("Contents: ");
+//             Serial.println(packetBuffer);
+//         }
+//         else {
+//             Serial.println("No packet received");
+//         }
+//     }
+// }
 
 void joystickTask(void) {
     while (true) {
