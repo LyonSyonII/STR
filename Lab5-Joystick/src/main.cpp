@@ -108,7 +108,7 @@ void joystickGetData(void);
 signed char getCommand(void);
 void sendCommand(uint8_t command);
 
-Thread supervisionThread(osPriorityLow);
+Thread supervisionThread(osPriorityNormal);
 void supervisionTask(void);
 
 void setup() {
@@ -153,22 +153,27 @@ signed char getCommand() {
     return speedCounter;
 }
 
+/**
+ *  Compute Time = 1ms
+ */
 void joystickTask(void) {
-    // uint64_t worst_exec_time = 0;
+    uint64_t worst_exec_time = 0;
 
     while (true) {
         const uint64_t start = Kernel::get_ms_count();
         joystickGetData();
         const signed char command = getCommand();
         sendCommand(command);
-        
+
+        // printMutex.lock();
+
         // uint64_t elapsed = Kernel::get_ms_count() - start;
-        // if (elapsed > worst_exec_time) { 
-        //     worst_exec_time = elapsed;
-        //     Serial.print("tftTask took "); 
-        //     Serial.println(worst_exec_time);
-        // }
-        
+        // worst_exec_time = max(worst_exec_time, elapsed);
+        // Serial.print("joystickTask took ");
+        // Serial.println(worst_exec_time);
+
+        // printMutex.unlock();
+
         ThisThread::sleep_until(start + 10);
     }
 }
@@ -289,6 +294,9 @@ void tftInit(void) {
     tft.drawTriangle(78, 145, 83, 148, 83, 142, 0xd0a0);  // Joy -x
 }
 
+/**
+ *  Compute Time = 34ms
+ */
 void tftTask(void) {
     uint64_t worst_exec_time = 0;
 
@@ -365,13 +373,15 @@ void tftTask(void) {
             tft.drawTriangle(87, 154, 84, 149, 90, 149, 0xd0a0);
         }
 
-        uint64_t elapsed = Kernel::get_ms_count() - start;
-        if (elapsed > worst_exec_time) { 
-            worst_exec_time = elapsed;
-            Serial.print("tftTask took "); 
-            Serial.println(worst_exec_time);
-        }
-        
+        // printMutex.lock();
+
+        // uint64_t elapsed = Kernel::get_ms_count() - start;
+        // worst_exec_time = max(worst_exec_time, elapsed);
+        // Serial.print("tftTask took ");
+        // Serial.println(worst_exec_time);
+
+        // printMutex.unlock();
+
         ThisThread::sleep_until(start + 100);
     }
 }
@@ -468,8 +478,11 @@ void joystickGetData(void) {
     yLast = y;
 }
 
+/**
+ *  Compute Time = 67ms
+ */
 void supervisionTask(void) {
-    uint64_t worst_exec_task = 0;
+    uint64_t worst_exec_time = 0;
 
     while (true) {
         const uint64_t start = Kernel::get_ms_count();
@@ -483,12 +496,15 @@ void supervisionTask(void) {
         Serial.println(" ");
         printMutex.unlock();
 
+
+        // printMutex.lock();
+
         // uint64_t elapsed = Kernel::get_ms_count() - start;
-        // if (elapsed > worst_exec_time) { 
-        //     worst_exec_time = elapsed;
-        //     Serial.print("tftTask took "); 
-        //     Serial.println(worst_exec_time);       
-         // }
+        // worst_exec_time = max(worst_exec_time, elapsed);
+        // Serial.print("supervisionTask took ");
+        // Serial.println(worst_exec_time);
+
+        // printMutex.unlock();
 
         ThisThread::sleep_until(start + 200);
     }
