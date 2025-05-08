@@ -165,7 +165,8 @@ void joystickTask(void) {
         // uint64_t elapsed = Kernel::get_ms_count() - start;
         // if (elapsed > worst_exec_time) { 
         //     worst_exec_time = elapsed;
-        //     printf("joystickTask took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
+        //     Serial.print("tftTask took "); 
+        //     Serial.println(worst_exec_time);
         // }
         
         ThisThread::sleep_until(start + 10);
@@ -485,8 +486,9 @@ void supervisionTask(void) {
         // uint64_t elapsed = Kernel::get_ms_count() - start;
         // if (elapsed > worst_exec_time) { 
         //     worst_exec_time = elapsed;
-        //     printf("task2 took %lu ms; worst time: %lu\n", elapsed, worst_exec_time);
-        // }
+        //     Serial.print("tftTask took "); 
+        //     Serial.println(worst_exec_time);       
+         // }
 
         ThisThread::sleep_until(start + 200);
     }
