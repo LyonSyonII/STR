@@ -5,7 +5,6 @@
 #include "MPU6050.h"      //IMU Inertial Measurement Unit MPU6050
 #include "RPC.h"
 #include "TM1637TinyDisplay.h"  //TM1637 7-segment 4x display
-#include "TinyGPS.h"            //GPS Global Positioning System
 #include "WiFi.h"
 #include "mbed.h"
 #include "rtos.h"
@@ -54,19 +53,6 @@ bool displayDots = true;
 byte minuteRunning = 0;
 byte secondRunning = 0;
 
-// global positioning system (it takes half an hour to update the first values!)
-TinyGPS gps;
-float lat = 0;  // 41.38;
-float lon = 0;  // 2.11;
-unsigned long age = 0;
-int year = 0;
-byte day = 0;
-byte month = 0;
-byte hour = 0;
-byte minute = 0;
-byte second = 0;
-byte hundredths = 0;
-
 // inertial measurement unit
 float Temp = 0;
 float pitch = 0;
@@ -92,19 +78,13 @@ const uint8_t TFT_RST = D12;
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
 // WiFi for udp, ur3 comm, telemetry, http, etc.
-char ssid[] = "WiFiAccessPointGiga_1";  // Access point
-char pass[] = "WiFiAccessPointGiga_1";  // Access point
-// char ssid[] = "wlan_str"; // your WPA network SSID (name)
-// char pass[] = "wlan_str"; // your WPA network password (use for WPA, or use as key for WEP)
+const char ssid[] = "patata";  // Access point
+const char pass[] = "patata1234";  // Access point
 int status = WL_IDLE_STATUS;     // the WiFi radio's status
 IPAddress ip(192, 168, 1, 111);  // static ip is not working!
-WiFiServer server(80);
 WiFiUDP Udp;
-WiFiClient client;
-String ur3Command = "";
-IPAddress ur3(192, 168, 1, 100);  // UR3 IP address (left robot)
-const unsigned int ur3PORT = 30003;
-const unsigned int gripperPORT = 41414;
+IPAddress segwayIp(192, 168, 1, 112);
+unsigned int segwayPort = 8888;
 
 // a mutex used when printing
 Mutex printMutex;  // Since we're printing from multiple threads, we need a mutex
@@ -139,6 +119,7 @@ void joystickGetData(void);
 void displayInit(void);
 void displayUpdate(void);
 void supervisionUpdate(void);
+void sendCommand(uint8_t command);
 
 void setup() {
     Serial.begin(115200);
@@ -176,7 +157,38 @@ void loop() {
     tftUpdate();
     supervisionUpdate();
 
-    delay(200);
+    const uint8_t data = 0xF1;
+    sendCommand(data);
+
+    delay(1000);
+}
+
+void sendCommand(uint8_t command) {
+    const int validClientSettings = Udp.beginPacket(segwayIp, segwayPort);
+    Serial.print("Sending command to ");
+    Serial.print(segwayIp);
+    Serial.print(":");
+    Serial.print(segwayPort);
+    Serial.print(" with command: ");
+    Serial.println(command, HEX);
+    if (!validClientSettings) {
+        Serial.println("Error: UDP beginPacket failed");
+        return;
+    }
+
+    const int writtenDataLength = Udp.write(command);
+    if (writtenDataLength == 0) {
+        Serial.println("Error: UDP write failed");
+        return;
+    }
+
+    const int dataSentSuccessfully = Udp.endPacket();
+    if (dataSentSuccessfully == 0) {
+        Serial.println("Error: UDP endPacket failed");
+    }
+    else {
+        Serial.println("Data sent successfully");
+    }
 }
 
 void ledInit(void) {
@@ -518,35 +530,6 @@ void imuGetData(void) {
     pitch = 360.0 / 6.28 * atan2(ay, sqrtf(ax * ax + az * az));
 }
 
-void gpsInit(void) { Serial1.begin(9600); }
-
-void gpsGetData(void) {
-    bool newData = false;
-    while (Serial1.available()) {
-        newData = true;
-        char c = Serial1.read();
-        // Serial.write(c); // uncomment this line if you want to see the GPS data flowing
-        if (gps.encode(c))  // Did a new valid sentence come in?
-            newData = true;
-    }
-
-    if (newData) {
-        unsigned long age;
-        gps.f_get_position(&lat, &lon, &age);
-        gps.crack_datetime(&year, &month, &day, &hour, &minute, &second, &hundredths, &age);
-        hour = hour + 1;  // CEST+1
-    }
-
-    if (lat > 90) lat = 0;
-    if (lon > 360) lon = 0;
-
-    if ((hour > 59) || (hour < 0)) {
-        hour = 0;
-        minute = 0;
-        second = 0;
-    }
-}
-
 void joystickInit(void) {
     pinMode(BUTTON_UP, INPUT);
     pinMode(BUTTON_RIGHT, INPUT);
@@ -661,83 +644,16 @@ void displayUpdate(void) {
 
 void supervisionUpdate(void) {
     printMutex.lock();
-    Serial.println("OSC");
-    Serial.print(Temp);
-    Serial.print(",");
-    Serial.print(pitch);
-    Serial.print(",");
-    Serial.print(roll);
-    Serial.print(",");
-    Serial.print(lat);
-    Serial.print(",");
-    Serial.print(lon);
-    Serial.println(" ");
+    // Serial.println("OSC");
+    // Serial.print(Temp);
+    // Serial.print(",");
+    // Serial.print(pitch);
+    // Serial.print(",");
+    // Serial.print(roll);
+    // Serial.print(",");
+    // Serial.print(lat);
+    // Serial.print(",");
+    // Serial.print(lon);
+    // Serial.println(" ");
     printMutex.unlock();
 }
-
-// void ur3Init(void)
-// {
-//   client.println("set_digital_out(0,True)");
-// }
-
-// void ur3Update(void)
-// {
-//     bool success =	false;
-
-//   if (client.connect(ur3, ur3PORT))
-// 	{
-//     	Serial.println("Connected to ur3");
-//   }
-//   client.println("set_digital_out(0,True)");
-// }
-
-// bool rg_grip(int rg_id = 0, float target_width = 100, float target_force = 10) {
-//   // Ensure target_width and target_force are within the specified ranges
-//   target_width = min(max(target_width, 0), 100);
-//   target_force = min(max(target_force, 0), 40);
-
-//   // Construct the XML request
-//   String xml_request = "<?xml version=\"1.0\"?>\r\n"
-//                        "<methodCall>\r\n"
-//                        "  <methodName>rg_grip</methodName>\r\n"
-//                        "  <params>\r\n"
-//                        "    <param>\r\n"
-//                        "      <value><int>" + String(rg_id) + "</int></value>\r\n"
-//                        "    </param>\r\n"
-//                        "    <param>\r\n"
-//                        "      <value><double>" + String(target_width) + "</double></value>\r\n"
-//                        "    </param>\r\n"
-//                        "    <param>\r\n"
-//                        "      <value><double>" + String(target_force) + "</double></value>\r\n"
-//                        "    </param>\r\n"
-//                        "  </params>\r\n"
-//                        "</methodCall>\r\n";
-
-//   if (!client2.connect(ur3, gripperPORT)) {
-//     return false;
-//   }
-
-//   String http_request = "POST / HTTP/1.1\r\n"
-//                         "Host: " +
-//                         String(ur3[0]) + String(".") +
-//                         String(ur3[1]) + String(".") +
-//                         String(ur3[2]) + String(".") +
-//                         String(ur3[3]) +
-//                         "\r\n"
-//                         "Content-Type: application/x-www-form-urlencoded\r\n"
-//                         "Content-Length: " + String(xml_request.length()) + "\r\n\r\n";
-
-//   client2.print(http_request + xml_request);
-//   Serial.print(http_request + xml_request);
-
-//   delay(100);
-
-//   while (client2.available()) {
-//     String response = client2.readStringUntil('\r');
-//     if (response.indexOf("200 OK") != -1) {
-//       return true; // Success
-//     }
-//   }
-
-//   return false;
-// }
