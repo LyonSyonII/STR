@@ -86,6 +86,7 @@ void setup() {
 void loop() {}
 
 // C = 4ms
+// T = 10ms
 void task1MoveMotor(const Offsets &offsets) {    
     // setup
     TickType_t lastWake = 0;
@@ -164,6 +165,7 @@ void task1MoveMotor(const Offsets &offsets) {
 }
 
 // C = 2ms
+// T = 5ms
 void task2ReceiveUDP(void*) {
     TickType_t lastWake = 0;
     // long worst_exec_time = 0;
@@ -200,6 +202,7 @@ void task2ReceiveUDP(void*) {
 }
 
 // C = 104ms
+// T = 200ms
 void task9Debug(void*) {
     TickType_t lastWake = 0;
     long worst_exec_time = 0;
