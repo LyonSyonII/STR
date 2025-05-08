@@ -24,13 +24,22 @@ const uint8_t BUTTON_K = D8;
 const uint8_t PIN_ANALOG_X = A0;
 const uint8_t PIN_ANALOG_Y = A1;
 
-PinStatus ButtonUpState = HIGH;
-PinStatus ButtonRightState = HIGH;
-PinStatus ButtonDownState = HIGH;
-PinStatus ButtonLeftState = HIGH;
+PinStatus ButtonAState = HIGH;
+PinStatus ButtonBState = HIGH;
+PinStatus ButtonCState = HIGH;
+PinStatus ButtonDState = HIGH;
 PinStatus ButtonEState = HIGH;
 PinStatus ButtonFState = HIGH;
 PinStatus ButtonKState = HIGH;
+PinStatus lastButtonAState = HIGH;
+PinStatus lastButtonBState = HIGH;
+PinStatus lastButtonCState = HIGH;
+PinStatus lastButtonDState = HIGH;
+PinStatus lastButtonEState = HIGH;
+PinStatus lastButtonFState = HIGH;
+PinStatus lastButtonKState = HIGH;
+int speedCounter = -5;
+bool shouldSendCommand = false;
 unsigned int JoystickAnalogX = 512;
 unsigned int JoystickAnalogY = 512;
 PinStatus JoystickXRightState = HIGH;
@@ -92,17 +101,15 @@ Thread tftThread(osPriorityNormal);
 void tftInit(void);
 void tftTask(void);
 
-// Thread joystickThread(osPriorityRealtime7);
+Thread joystickThread(osPriorityRealtime7);
 void joystickInit(void);
 void joystickTask(void);
 void joystickGetData(void);
+signed char getCommand(void);
 void sendCommand(uint8_t command);
 
 Thread supervisionThread(osPriorityLow);
 void supervisionTask(void);
-
-Thread receiveDataThread(osPriorityRealtime7);
-void receiveDataTask(void);
 
 void setup() {
     Serial.begin(115200);
@@ -112,69 +119,91 @@ void setup() {
     tftInit();
     joystickInit();
 
-    // ckThread.start(joystickTask);
+    joystickThread.start(joystickTask);
     supervisionThread.start(supervisionTask);
     tftThread.start(tftTask);
-    receiveDataThread.start(receiveDataTask);
+
+    analogReadResolution(10);
 }
 
 void loop() {}
 
-void receiveDataTask() {
-    while (true) {
-        const uint64_t lastWakeTime = Kernel::get_ms_count();
+signed char getCommand() {
+    // Serial.print("Current JoystickAnalogY: ");
+    // Serial.println(JoystickAnalogY);
 
-        int packetSize = Udp.parsePacket();
+    // Serial.print("Current y value: ");
+    // Serial.println(y);
 
-        if (packetSize) {
-            Serial.print("Received data from ");
-            Serial.print(Udp.remoteIP());
-            Serial.print(":");
-            Serial.print(Udp.remotePort());
-            Serial.println();
-            Serial.print("Received packet of size ");
-            Serial.println(packetSize);
-            char packetBuffer[255];
-            int len = Udp.read(packetBuffer, 255);
-            if (len > 0) {
-                packetBuffer[len] = 0;
-            }
-            Serial.print("Contents: ");
-            Serial.println(packetBuffer);
-        }
-        else {
-            Serial.println("No packet received");
-        }
+    // Serial.print("Current JoystickAnalogX: ");
+    // Serial.println(JoystickAnalogX);
+
+    // Serial.print("Current x value: ");
+    // Serial.println(x);
+
+    // Serial.print("Current ButtonAState: ");
+    // Serial.println(ButtonAState);
+
+    // Serial.print("Current ButtonBState: ");
+    // Serial.println(ButtonBState);
+
+    // Serial.print("Deadband: ");
+    // Serial.println(joystickDeadband);
+
+    // Serial.print("Current Button A State: ");
+    // Serial.println(ButtonAState);
+
+    // Serial.print("Current Button B State: ");
+    // Serial.println(ButtonBState);
+
+    // Serial.print("Current Button C State: ");
+    // Serial.println(ButtonCState);
+
+    // Serial.print("Current Button D State: ");
+    // Serial.println(ButtonDState);
+
+    shouldSendCommand = false;
+
+    if (ButtonCState == LOW && lastButtonCState == HIGH) {
+        speedCounter = speedCounter - 1;
+        if (speedCounter < -9) speedCounter = -9;
+
+        shouldSendCommand = true;
     }
+
+    if (ButtonAState == LOW && lastButtonAState == HIGH) {
+        speedCounter = speedCounter + 1;
+        if (speedCounter > -1) speedCounter = -1;
+
+        shouldSendCommand = true;
+    }
+
+    if (ButtonKState == LOW && lastButtonKState == HIGH) {
+        speedCounter = -5;
+        shouldSendCommand = true;
+    }
+
+    return speedCounter;
 }
 
 void joystickTask(void) {
     while (true) {
         const uint64_t lastWakeTime = Kernel::get_ms_count();
         joystickGetData();
-        sendCommand(0xF1);
-        ThisThread::sleep_until(50 + lastWakeTime);
+        const signed char command = getCommand();
+        sendCommand(command);
+        ThisThread::sleep_until(lastWakeTime + 10);
     }
 }
 
 void sendCommand(uint8_t command) {
-    const int validClientSettings = Udp.beginPacket(segwayIp, segwayPort);
-    Serial.print("Sending command to ");
-    Serial.print(segwayIp);
-    Serial.print(":");
-    Serial.print(segwayPort);
-    Serial.print(" with command: ");
-    Serial.println(command, HEX);
-    if (!validClientSettings) {
-        Serial.println("Error: UDP beginPacket failed");
+    if (!shouldSendCommand) {
         return;
     }
 
+    const int validClientSettings = Udp.beginPacket(segwayIp, segwayPort);
+
     const int writtenDataLength = Udp.write(command);
-    if (writtenDataLength == 0) {
-        Serial.println("Error: UDP write failed");
-        return;
-    }
 
     const int dataSentSuccessfully = Udp.endPacket();
     if (dataSentSuccessfully == 0) {
@@ -183,6 +212,8 @@ void sendCommand(uint8_t command) {
     else {
         Serial.println("Data sent successfully");
     }
+
+    shouldSendCommand = false;
 }
 
 void wifiInitAccessPoint(void) {
@@ -284,25 +315,28 @@ void tftInit(void) {
 void tftTask(void) {
     while (true) {
         const uint64_t lastWakeTime = Kernel::get_ms_count();
-        if (ButtonUpState == LOW) {
+        tft.setCursor(30, 80);
+        tft.print(speedCounter);
+
+        if (ButtonAState == LOW) {
             tft.fillCircle(115, 140, 2, 0xd0a0);  // Up-button
         } else {
             tft.fillCircle(115, 140, 2, 0xffff);  // Up-button
             tft.drawCircle(115, 140, 2, 0xd0a0);  // Up-button1
         }
-        if (ButtonRightState == LOW) {
+        if (ButtonBState == LOW) {
             tft.fillCircle(120, 145, 2, 0xd0a0);
         } else {
             tft.fillCircle(120, 145, 2, 0xffff);
             tft.drawCircle(120, 145, 2, 0xd0a0);
         }
-        if (ButtonDownState == LOW) {
+        if (ButtonCState == LOW) {
             tft.fillCircle(115, 150, 2, 0xd0a0);
         } else {
             tft.fillCircle(115, 150, 2, 0xffff);
             tft.drawCircle(115, 150, 2, 0xd0a0);
         }
-        if (ButtonLeftState == LOW) {
+        if (ButtonDState == LOW) {
             tft.fillCircle(110, 145, 2, 0xd0a0);
         } else {
             tft.fillCircle(110, 145, 2, 0xffff);
@@ -371,10 +405,18 @@ void joystickGetData(void) {
     JoystickAnalogX = analogRead(PIN_ANALOG_X);
     JoystickAnalogY = analogRead(PIN_ANALOG_Y);
 
-    ButtonUpState = digitalRead(BUTTON_UP);
-    ButtonRightState = digitalRead(BUTTON_RIGHT);
-    ButtonDownState = digitalRead(BUTTON_DOWN);
-    ButtonLeftState = digitalRead(BUTTON_LEFT);
+    lastButtonAState = ButtonAState;
+    lastButtonBState = ButtonBState;
+    lastButtonCState = ButtonCState;
+    lastButtonDState = ButtonDState;
+    lastButtonEState = ButtonEState;
+    lastButtonFState = ButtonFState;
+    lastButtonKState = ButtonKState;
+
+    ButtonAState = digitalRead(BUTTON_UP);
+    ButtonBState = digitalRead(BUTTON_RIGHT);
+    ButtonCState = digitalRead(BUTTON_DOWN);
+    ButtonDState = digitalRead(BUTTON_LEFT);
     ButtonEState = digitalRead(BUTTON_E);
     ButtonFState = digitalRead(BUTTON_F);
     ButtonKState = digitalRead(BUTTON_K);
@@ -416,21 +458,21 @@ void joystickGetData(void) {
         // y=0;
     }
 
-    if (ButtonUpState == LOW) {
+    if (ButtonAState == LOW) {
         z = z + 1;
         if (z > 100) z = 100;
     }
 
-    if (ButtonDownState == LOW) {
+    if (ButtonCState == LOW) {
         z = z - 1;
         if (z < -100) z = -100;
     }
 
-    if (ButtonRightState == LOW) {
+    if (ButtonBState == LOW) {
         yaw = yaw + 1.0;
     }
 
-    if (ButtonLeftState == LOW) {
+    if (ButtonDState == LOW) {
         yaw = yaw - 1.0;
     }
 
@@ -443,13 +485,13 @@ void supervisionTask(void) {
     while (true) {
         const uint64_t lastWakeTime = Kernel::get_ms_count();
         printMutex.lock();
-        Serial.println("OSC");
-        Serial.print(Temp);
-        Serial.print(",");
-        Serial.print(pitch);
-        Serial.print(",");
-        Serial.print(roll);
-        Serial.println(" ");
+        // Serial.println("OSC");
+        // Serial.print(Temp);
+        // Serial.print(",");
+        // Serial.print(pitch);
+        // Serial.print(",");
+        // Serial.print(roll);
+        // Serial.println(" ");
         printMutex.unlock();
         ThisThread::sleep_until(lastWakeTime + 200);
     }
