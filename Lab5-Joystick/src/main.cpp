@@ -5,9 +5,9 @@
 #include "MPU6050.h"      //IMU Inertial Measurement Unit MPU6050
 #include "RPC.h"
 #include "TM1637TinyDisplay.h"  //TM1637 7-segment 4x display
-#include "WiFi.h"
 #include "mbed.h"
 #include "rtos.h"
+#include "WiFi.h"
 
 using namespace mbed;
 using namespace rtos;
@@ -66,9 +66,6 @@ float yBall = 0;
 float xBallLast = 0;
 float yBallLast = 0;
 
-// laser output
-PinStatus laserState = LOW;
-
 // thin-film-transistor liquid-crystal display
 const uint8_t TFT_CS = D13;
 const uint8_t TFT_DC = D11;
@@ -78,7 +75,7 @@ const uint8_t TFT_RST = D12;
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
 // WiFi for udp, ur3 comm, telemetry, http, etc.
-const char ssid[] = "patata";  // Access point
+const char ssid[] = "patata1234";  // Access point
 const char pass[] = "patata1234";  // Access point
 int status = WL_IDLE_STATUS;     // the WiFi radio's status
 IPAddress ip(192, 168, 1, 111);  // static ip is not working!
@@ -89,78 +86,75 @@ unsigned int segwayPort = 8888;
 // a mutex used when printing
 Mutex printMutex;  // Since we're printing from multiple threads, we need a mutex
 
-// capacitive touch button
-PinStatus capacitiveValue = LOW;
-
-// additional global variables
-unsigned int counter = 0;
-
-// Function prototypes
-void ledInit(void);
-void ledUpdate(void);
 void wifiInitAccessPoint(void);
-void wifiInitWPA(void);
+
+Thread tftThread(osPriorityNormal);
 void tftInit(void);
-void tftUpdate(void);
-void motorInit(void);
-void motorON(void);
-void motorOFF(void);
-void laserInit(void);
-void laserON(void);
-void laserOFF(void);
-void capacitiveInit(void);
-void capacitiveUpdate(void);
-void imuInit(void);
-void imuGetData(void);
-void gpsInit(void);
-void gpsGetData(void);
+void tftTask(void);
+
+// Thread joystickThread(osPriorityRealtime7);
 void joystickInit(void);
+void joystickTask(void);
 void joystickGetData(void);
-void displayInit(void);
-void displayUpdate(void);
-void supervisionUpdate(void);
 void sendCommand(uint8_t command);
+
+Thread supervisionThread(osPriorityLow);
+void supervisionTask(void);
+
+Thread receiveDataThread(osPriorityRealtime7);
+void receiveDataTask(void);
 
 void setup() {
     Serial.begin(115200);
     Serial.println("Init...");
 
-    ledInit();
-    wifiInitAccessPoint();  // wifiInitWPA();
+    wifiInitAccessPoint();
     tftInit();
-    motorInit();
-    laserInit();
-    capacitiveInit();
-    imuInit();
-    gpsInit();
     joystickInit();
-    displayInit();
+
+    // ckThread.start(joystickTask);
+    supervisionThread.start(supervisionTask);
+    tftThread.start(tftTask);
+    receiveDataThread.start(receiveDataTask);
 }
 
-void loop() {
-    ledUpdate();
-    if (laserState == LOW) {
-        laserON();
-    } else {
-        laserOFF();
-    }
-    capacitiveUpdate();
-    if (capacitiveValue == HIGH) {
-        motorON();
-    } else {
-        motorOFF();
-    }
-    imuGetData();
-    gpsGetData();
-    joystickGetData();
-    displayUpdate();
-    tftUpdate();
-    supervisionUpdate();
+void loop() {}
 
-    const uint8_t data = 0xF1;
-    sendCommand(data);
+void receiveDataTask() {
+    while (true) {
+        const uint64_t lastWakeTime = Kernel::get_ms_count();
 
-    delay(1000);
+        int packetSize = Udp.parsePacket();
+
+        if (packetSize) {
+            Serial.print("Received data from ");
+            Serial.print(Udp.remoteIP());
+            Serial.print(":");
+            Serial.print(Udp.remotePort());
+            Serial.println();
+            Serial.print("Received packet of size ");
+            Serial.println(packetSize);
+            char packetBuffer[255];
+            int len = Udp.read(packetBuffer, 255);
+            if (len > 0) {
+                packetBuffer[len] = 0;
+            }
+            Serial.print("Contents: ");
+            Serial.println(packetBuffer);
+        }
+        else {
+            Serial.println("No packet received");
+        }
+    }
+}
+
+void joystickTask(void) {
+    while (true) {
+        const uint64_t lastWakeTime = Kernel::get_ms_count();
+        joystickGetData();
+        sendCommand(0xF1);
+        ThisThread::sleep_until(50 + lastWakeTime);
+    }
 }
 
 void sendCommand(uint8_t command) {
@@ -189,18 +183,6 @@ void sendCommand(uint8_t command) {
     else {
         Serial.println("Data sent successfully");
     }
-}
-
-void ledInit(void) {
-    pinMode(LEDR, OUTPUT);
-    pinMode(LEDG, OUTPUT);
-    pinMode(LEDB, OUTPUT);
-}
-
-void ledUpdate(void) {
-    digitalWrite(LEDR, random(0, 2));  // random(min,max)//min is inclusive, max is exclusive
-    digitalWrite(LEDG, random(0, 2));
-    digitalWrite(LEDB, random(0, 2));
 }
 
 void wifiInitAccessPoint(void) {
@@ -261,66 +243,8 @@ void wifiInitAccessPoint(void) {
         }
     }
     Serial.println();
-}
 
-void wifiInitWPA(void) {
-    // check for the WiFi module:
-    if (WiFi.status() == WL_NO_MODULE) {
-        Serial.println("Communication with WiFi module failed!");
-    }
-    WiFi.config(ip);
-    // print the network name (SSID);
-    Serial.print("Creating access point named: ");
-    Serial.println(ssid);
-    // Create open network. Change this line if you want to create an WEP network:
-    int status = WL_IDLE_STATUS;
-    status = WiFi.begin(ssid, pass);
-    if (status != WL_AP_LISTENING) {
-        Serial.println("Creating access point failed");
-    }
-    // print the SSID of the network you're attached to:
-    Serial.print("SSID: ");
-    Serial.println(WiFi.SSID());
-
-    // print your board's IP address:
-    IPAddress ip = WiFi.localIP();
-    Serial.print("IP Address: ");
-    Serial.println(ip);
-
-    // print the received signal strength:
-    long rssi = WiFi.RSSI();
-    Serial.print("signal strength (RSSI):");
-    Serial.print(rssi);
-    Serial.println(" dBm");
-    // print the SSID of the network you're attached to:
-    Serial.print("SSID: ");
-    Serial.println(WiFi.SSID());
-
-    // print the encryption type:
-    byte encryption = WiFi.encryptionType();
-    Serial.print("Encryption Type:");
-    Serial.println(encryption, HEX);
-    Serial.println();
-    // print your board's IP address:
-    ip = WiFi.localIP();
-    Serial.print("IP Address: ");
-    Serial.println(ip);
-    Serial.println(ip);
-
-    // print your MAC address:
-    byte mac[6];
-    WiFi.macAddress(mac);
-    Serial.print("MAC address: ");
-    for (int i = 5; i >= 0; i--) {
-        if (mac[i] < 16) {
-            Serial.print("0");
-        }
-        Serial.print(mac[i], HEX);
-        if (i > 0) {
-            Serial.print(":");
-        }
-    }
-    Serial.println();
+    Udp.begin(8888);
 }
 
 void tftInit(void) {
@@ -357,177 +281,78 @@ void tftInit(void) {
     tft.drawTriangle(78, 145, 83, 148, 83, 142, 0xd0a0);  // Joy -x
 }
 
-void tftUpdate(void) {
-    tft.setTextColor(0x0000, 0xffff);
-    tft.setCursor(5, 140);
-    tft.print("lat=");
-    tft.print(lat, 6);
-    // tft.write(0xF8);
+void tftTask(void) {
+    while (true) {
+        const uint64_t lastWakeTime = Kernel::get_ms_count();
+        if (ButtonUpState == LOW) {
+            tft.fillCircle(115, 140, 2, 0xd0a0);  // Up-button
+        } else {
+            tft.fillCircle(115, 140, 2, 0xffff);  // Up-button
+            tft.drawCircle(115, 140, 2, 0xd0a0);  // Up-button1
+        }
+        if (ButtonRightState == LOW) {
+            tft.fillCircle(120, 145, 2, 0xd0a0);
+        } else {
+            tft.fillCircle(120, 145, 2, 0xffff);
+            tft.drawCircle(120, 145, 2, 0xd0a0);
+        }
+        if (ButtonDownState == LOW) {
+            tft.fillCircle(115, 150, 2, 0xd0a0);
+        } else {
+            tft.fillCircle(115, 150, 2, 0xffff);
+            tft.drawCircle(115, 150, 2, 0xd0a0);
+        }
+        if (ButtonLeftState == LOW) {
+            tft.fillCircle(110, 145, 2, 0xd0a0);
+        } else {
+            tft.fillCircle(110, 145, 2, 0xffff);
+            tft.drawCircle(110, 145, 2, 0xd0a0);
+        }
+        if (ButtonEState == LOW) {
+            tft.fillCircle(104, 150, 2, 0xd0a0);
+        } else {
+            tft.fillCircle(104, 150, 2, 0xffff);
+            tft.drawCircle(104, 150, 2, 0xd0a0);
+        }
+        if (ButtonFState == LOW) {
+            tft.fillCircle(98, 150, 2, 0xd0a0);
+        } else {
+            tft.fillCircle(98, 150, 2, 0xffff);
+            tft.drawCircle(98, 150, 2, 0xd0a0);
+        }
+        if (ButtonKState == LOW) {
+            tft.fillCircle(87, 145, 2, 0xd0a0);
+        } else {
+            tft.fillCircle(87, 145, 2, 0xffff);
+            tft.drawCircle(87, 145, 2, 0xd0a0);
+        }
+        if (JoystickXRightState == HIGH) {
+            tft.fillTriangle(91, 142, 91, 148, 96, 145, 0xd0a0);
+        } else {
+            tft.fillTriangle(91, 142, 91, 148, 96, 145, 0xffff);
+            tft.drawTriangle(91, 142, 91, 148, 96, 145, 0xd0a0);
+        }
+        if (JoystickXLeftState == HIGH) {
+            tft.fillTriangle(78, 145, 83, 148, 83, 142, 0xd0a0);
+        } else {
+            tft.fillTriangle(78, 145, 83, 148, 83, 142, 0xffff);
+            tft.drawTriangle(78, 145, 83, 148, 83, 142, 0xd0a0);
+        }
+        if (JoystickYUpState == HIGH) {
+            tft.fillTriangle(87, 136, 84, 141, 90, 141, 0xd0a0);
+        } else {
+            tft.fillTriangle(87, 136, 84, 141, 90, 141, 0xffff);
+            tft.drawTriangle(87, 136, 84, 141, 90, 141, 0xd0a0);
+        }
+        if (JoystickYDownState == HIGH) {
+            tft.fillTriangle(87, 154, 84, 149, 90, 149, 0xd0a0);
+        } else {
+            tft.fillTriangle(87, 154, 84, 149, 90, 149, 0xffff);
+            tft.drawTriangle(87, 154, 84, 149, 90, 149, 0xd0a0);
+        }
 
-    tft.setTextColor(0x0000, 0xffff);
-    tft.setCursor(5, 150);
-    tft.print("lon=");
-    tft.print(lon, 6);
-    // tft.write(0xF8);
-
-    if (ButtonUpState == LOW) {
-        tft.fillCircle(115, 140, 2, 0xd0a0);  // Up-button
-    } else {
-        tft.fillCircle(115, 140, 2, 0xffff);  // Up-button
-        tft.drawCircle(115, 140, 2, 0xd0a0);  // Up-button1
+        ThisThread::sleep_until(lastWakeTime + 100);
     }
-    if (ButtonRightState == LOW) {
-        tft.fillCircle(120, 145, 2, 0xd0a0);
-    } else {
-        tft.fillCircle(120, 145, 2, 0xffff);
-        tft.drawCircle(120, 145, 2, 0xd0a0);
-    }
-    if (ButtonDownState == LOW) {
-        tft.fillCircle(115, 150, 2, 0xd0a0);
-    } else {
-        tft.fillCircle(115, 150, 2, 0xffff);
-        tft.drawCircle(115, 150, 2, 0xd0a0);
-    }
-    if (ButtonLeftState == LOW) {
-        tft.fillCircle(110, 145, 2, 0xd0a0);
-    } else {
-        tft.fillCircle(110, 145, 2, 0xffff);
-        tft.drawCircle(110, 145, 2, 0xd0a0);
-    }
-    if (ButtonEState == LOW) {
-        tft.fillCircle(104, 150, 2, 0xd0a0);
-    } else {
-        tft.fillCircle(104, 150, 2, 0xffff);
-        tft.drawCircle(104, 150, 2, 0xd0a0);
-    }
-    if (ButtonFState == LOW) {
-        tft.fillCircle(98, 150, 2, 0xd0a0);
-    } else {
-        tft.fillCircle(98, 150, 2, 0xffff);
-        tft.drawCircle(98, 150, 2, 0xd0a0);
-    }
-    if (ButtonKState == LOW) {
-        tft.fillCircle(87, 145, 2, 0xd0a0);
-    } else {
-        tft.fillCircle(87, 145, 2, 0xffff);
-        tft.drawCircle(87, 145, 2, 0xd0a0);
-    }
-    if (JoystickXRightState == HIGH) {
-        tft.fillTriangle(91, 142, 91, 148, 96, 145, 0xd0a0);
-    } else {
-        tft.fillTriangle(91, 142, 91, 148, 96, 145, 0xffff);
-        tft.drawTriangle(91, 142, 91, 148, 96, 145, 0xd0a0);
-    }
-    if (JoystickXLeftState == HIGH) {
-        tft.fillTriangle(78, 145, 83, 148, 83, 142, 0xd0a0);
-    } else {
-        tft.fillTriangle(78, 145, 83, 148, 83, 142, 0xffff);
-        tft.drawTriangle(78, 145, 83, 148, 83, 142, 0xd0a0);
-    }
-    if (JoystickYUpState == HIGH) {
-        tft.fillTriangle(87, 136, 84, 141, 90, 141, 0xd0a0);
-    } else {
-        tft.fillTriangle(87, 136, 84, 141, 90, 141, 0xffff);
-        tft.drawTriangle(87, 136, 84, 141, 90, 141, 0xd0a0);
-    }
-    if (JoystickYDownState == HIGH) {
-        tft.fillTriangle(87, 154, 84, 149, 90, 149, 0xd0a0);
-    } else {
-        tft.fillTriangle(87, 154, 84, 149, 90, 149, 0xffff);
-        tft.drawTriangle(87, 154, 84, 149, 90, 149, 0xd0a0);
-    }
-}
-
-void motorInit(void) {
-    pinMode(37, OUTPUT);
-    pinMode(39, OUTPUT);
-    pinMode(41, OUTPUT);
-    digitalWrite(37, LOW);
-    digitalWrite(39, HIGH);
-}
-void motorON(void) { digitalWrite(41, HIGH); }
-void motorOFF(void) { digitalWrite(41, LOW); }
-
-void laserInit(void) {
-    pinMode(D53, OUTPUT);
-    pinMode(D51, OUTPUT);
-    digitalWrite(D53, HIGH);
-}
-void laserON(void) {
-    laserState = HIGH;
-    digitalWrite(D51, laserState);
-}
-void laserOFF(void) {
-    laserState = LOW;
-    digitalWrite(D51, laserState);
-}
-
-void capacitiveInit(void) {
-    pinMode(23, INPUT);
-    pinMode(25, OUTPUT);
-    digitalWrite(25, LOW);
-}
-void capacitiveUpdate(void) { capacitiveValue = digitalRead(23); }
-
-void imuInit(void) {
-    Wire.begin();
-    // Activate the MPU-6050
-    Wire.beginTransmission(0x68);  // Device Address
-    Wire.write(0x6B);              // Register to write too
-    Wire.write(0x00);              // Value to write
-    Wire.endTransmission();
-
-    // Set Accelerometer sensitivity
-    // Wire.write; 2g -> 0x00, 4g -> 0x08, 8g -> 0x10, 16g -> 0x18
-    Wire.beginTransmission(0x68);
-    Wire.write(0x1C);
-    Wire.write(0x08);
-    Wire.endTransmission();
-
-    // Set Gyro sensitivity
-    // 250 deg/s -> 0x00, 500 deg/s -> 0x08, 1000 deg/s -> 0x10, 2000 deg/s -> 0x18
-    Wire.beginTransmission(0x68);
-    Wire.write(0x1B);
-    Wire.write(0x08);
-    Wire.endTransmission();
-}
-
-void imuGetData(void) {
-    // Set the Register to read from
-    Wire.beginTransmission(0x68);
-    Wire.write(0x3B);
-    Wire.endTransmission();
-
-    // Request 14 bytes from MPU6050
-    Wire.requestFrom(0x68, 14);
-
-    // Read data 6x Acceleration Bytes, 2x Temp Bytes, 6x Gyro Bytes
-    //               High Byte          Low Byte
-    int16_t acc_x = (Wire.read() << 8 | Wire.read());
-    int16_t acc_y = Wire.read() << 8 | Wire.read();
-    int16_t acc_z = Wire.read() << 8 | Wire.read();
-    int16_t temperature = Wire.read() << 8 | Wire.read();
-    int16_t gyro_x = Wire.read() << 8 | Wire.read();
-    int16_t gyro_y = Wire.read() << 8 | Wire.read();
-    int16_t gyro_z = Wire.read() << 8 | Wire.read();
-
-    // Acceleration Conversion
-    float ax = acc_x / 8192.0;
-    float ay = acc_y / 8192.0;
-    float az = acc_z / 8192.0;
-
-    // Temperature Conversion
-    Temp = (temperature / 340.0) + 36.53;
-
-    // Gyroscope Conversion
-    // double gX = gyro_x/65.5;
-    // double gY = gyro_y/65.5;
-    // double gZ = gyro_z/65.5;
-
-    // mpu.getMotion6(&ax, &ay, &az, &wx, &wy, &wz);
-    // Temp=mpu.getTemperature()/340.0f + 36.53f;
-    roll = 360.0 / 6.28 * atan2(ax, sqrtf(ay * ay + az * az));
-    pitch = 360.0 / 6.28 * atan2(ay, sqrtf(ax * ax + az * az));
 }
 
 void joystickInit(void) {
@@ -614,46 +439,18 @@ void joystickGetData(void) {
     yLast = y;
 }
 
-void displayInit(void) {
-    display.begin();
-    display.showString("Init");
-}
-
-void displayUpdate(void) {
-    counter++;
-
-    // secondRunning=(xTaskGetTickCount()/configTICK_RATE_HZ)%60;
-    // minuteRunning=(xTaskGetTickCount()/configTICK_RATE_HZ)/60;
-    auto timeSecondsNow = time_point_cast<seconds>(Kernel::Clock::now());  // Convert time_point to one in microsecond accuracy
-    long timeSeconds = timeSecondsNow.time_since_epoch().count();
-    secondRunning = timeSeconds % 60;
-    minuteRunning = timeSeconds / 60;
-
-    if (counter % 1 == 0) {
-        displayDots = !displayDots;
+void supervisionTask(void) {
+    while (true) {
+        const uint64_t lastWakeTime = Kernel::get_ms_count();
+        printMutex.lock();
+        Serial.println("OSC");
+        Serial.print(Temp);
+        Serial.print(",");
+        Serial.print(pitch);
+        Serial.print(",");
+        Serial.print(roll);
+        Serial.println(" ");
+        printMutex.unlock();
+        ThisThread::sleep_until(lastWakeTime + 200);
     }
-    // display.showNumberDec(int num, uint8_t dots = 0, bool leading_zero = false, uint8_t length = MAXDIGITS, uint8_t pos = 0);
-    if ((minute != 0) && (hour != 0)) {
-        display.showNumberDec(minute, 0b01000000 * displayDots, true, 2, 2);
-        display.showNumberDec(hour, 0b01000000 * displayDots, true, 2, 0);
-    } else {
-        display.showNumberDec(secondRunning, 0b01000000 * displayDots, true, 2, 2);
-        display.showNumberDec(minuteRunning, 0b01000000 * displayDots, true, 2, 0);
-    }
-}
-
-void supervisionUpdate(void) {
-    printMutex.lock();
-    // Serial.println("OSC");
-    // Serial.print(Temp);
-    // Serial.print(",");
-    // Serial.print(pitch);
-    // Serial.print(",");
-    // Serial.print(roll);
-    // Serial.print(",");
-    // Serial.print(lat);
-    // Serial.print(",");
-    // Serial.print(lon);
-    // Serial.println(" ");
-    printMutex.unlock();
 }
