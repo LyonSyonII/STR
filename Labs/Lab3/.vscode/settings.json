@@ -1,0 +1,7 @@
+{
+    "C_Cpp.clang_format_fallbackStyle": "{ BasedOnStyle: Google, ColumnLimit: 0 }",
+    "[cpp]": {
+      "editor.tabSize": 2
+    },
+    "files.autoSave": "afterDelay"
+}

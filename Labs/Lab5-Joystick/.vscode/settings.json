@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.pas": "pascal",
+        "*.toml.bytes": "toml",
+        "*.inc": "arm64",
+        "thread": "cpp"
+    }
+}

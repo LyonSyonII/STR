@@ -1,7 +1,0 @@
-notebook
-matplotlib
-pandas
-nbconvert
-pyserial
-python-dotenv
-datetime
