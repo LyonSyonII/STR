@@ -6,3 +6,9 @@
 - Actualitzar sistema: `sudo apt update && sudo apt install ubuntu-advantage-tools`
 - Activar real time kernel: `sudo pro enable realtime-kernel`
 - Increase storage: (host) `multipass set local.str.disk=16G`
+
+## Intel RealSense
+
+- Intel page: `https://dev.intelrealsense.com/docs/using-depth-camera-with-raspberry-pi-3`
+- Manual intel: `https://github.com/IntelRealSense/librealsense/blob/development/doc/installation.md`
+- `librealsense`: `https://github.com/IntelRealSense/librealsense`
