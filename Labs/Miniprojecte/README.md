@@ -12,3 +12,8 @@
 - Intel page: `https://dev.intelrealsense.com/docs/using-depth-camera-with-raspberry-pi-3`
 - Manual intel: `https://github.com/IntelRealSense/librealsense/blob/development/doc/installation.md`
 - `librealsense`: `https://github.com/IntelRealSense/librealsense`
+
+## Pantall uc-649
+
+- Manual: `https://uctronics.com/download/Amazon/B0106.pdf`
+
