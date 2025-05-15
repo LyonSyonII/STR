@@ -17,3 +17,6 @@
 
 - Manual: `https://uctronics.com/download/Amazon/B0106.pdf`
 
+## Other links
+
+- `https://github.com/mathklk/realsense_raspberry_pi4`
