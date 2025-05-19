@@ -20,3 +20,5 @@
 ## Other links
 
 - `https://github.com/mathklk/realsense_raspberry_pi4`
+
+RT-TESTS PER RASPBERRY PI
