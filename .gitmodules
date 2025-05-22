@@ -1,0 +1,3 @@
+[submodule "Labs/raspberry-str"]
+	path = Labs/raspberry-str
+	url = https://github.com/STR-Primavera-2024-2025/raspberry-str
