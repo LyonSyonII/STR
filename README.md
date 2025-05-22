@@ -1,14 +1,24 @@
-# Sistemes Temps Real
+# Ubuntu Real Time
+> Referencia principal: https://documentation.ubuntu.com/real-time/en/latest/
 
-Examen:
-2 problemes planificacio ciclic
-2 problemes response time analysis
-- Picats amb scripts
-2 problemes response demand criterium
-- Picats amb scripts
-1 pregunta 
+## [Install steps](https://documentation.ubuntu.com/pro-client/en/latest/howtoguides/enable_realtime_kernel/)
 
-Podem portar ordinador, tot el que vulguem
+- Actualitzar sistema: `sudo apt update && sudo apt install ubuntu-advantage-tools`
+- Activar real time kernel: `sudo pro enable realtime-kernel`
+- Increase storage: (host) `multipass set local.str.disk=16G`
 
-Kernel:
-Qui calcula el deadline absolut (TaskDelayUntil (deadline absolut + el que em falta per arribar a until))
+## Intel RealSense
+
+- Intel page: `https://dev.intelrealsense.com/docs/using-depth-camera-with-raspberry-pi-3`
+- Manual intel: `https://github.com/IntelRealSense/librealsense/blob/development/doc/installation.md`
+- `librealsense`: `https://github.com/IntelRealSense/librealsense`
+
+## Pantall uc-649
+
+- Manual: `https://uctronics.com/download/Amazon/B0106.pdf`
+
+## Other links
+
+- `https://github.com/mathklk/realsense_raspberry_pi4`
+
+RT-TESTS PER RASPBERRY PI
