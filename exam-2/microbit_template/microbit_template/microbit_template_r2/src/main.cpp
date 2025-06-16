@@ -27,14 +27,14 @@ const int LEDMICRO = 28;
 int led1State = LOW;
 
 // circular buffer for debugging
-#define BUFF_SIZE 500
-float t[BUFF_SIZE] = {0};
-const char* circ_buffer1[BUFF_SIZE] = {0};
-const char* circ_buffer2[BUFF_SIZE] = {0};
-const char* circ_buffer3[BUFF_SIZE] = {0};
-const char* circ_buffer4[BUFF_SIZE] = {0};
-const char* circ_buffer5[BUFF_SIZE] = {0};
-float debug_data1[BUFF_SIZE] = {0};
+#define BUFF_SIZE TSTOP * 5
+float t[BUFF_SIZE] = { };
+char circ_buffer1[BUFF_SIZE] = { };
+char circ_buffer2[BUFF_SIZE] = { };
+char circ_buffer3[BUFF_SIZE] = { };
+char circ_buffer4[BUFF_SIZE] = { };
+char circ_buffer5[BUFF_SIZE] = { };
+char circ_buffer9[BUFF_SIZE] = { };
 unsigned int circ_buffer_counter = 0;
 
 // task handlers
@@ -43,6 +43,7 @@ TaskHandle_t Task2Handle;
 TaskHandle_t Task3Handle;
 TaskHandle_t Task4Handle;
 TaskHandle_t Task5Handle;
+TaskHandle_t Task9SchedulerHandle;
 
 // timer handlers
 TimerHandle_t xPeriodicTimer, xOneShotTimer;
@@ -53,6 +54,7 @@ void Task2(void* pvParameters);
 void Task3(void* pvParameters);
 void Task4(void* pvParameters);
 void Task5(void* pvParameters);
+void Task9Scheduler(void* pvParameters);
 void OneShotTimerCallback(TimerHandle_t xTimer);
 
 void str_compute(unsigned long milliseconds);
@@ -68,11 +70,12 @@ void setup()  // put your setup code here, to run once:
     xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(TSTOP), pdFALSE, 0, OneShotTimerCallback);
     xOneShotStarted = xTimerStart(xOneShotTimer, 0);
 
-    xTaskCreate(Task1, "Task1", configMINIMAL_STACK_SIZE, NULL, 5, &Task1Handle);
-    xTaskCreate(Task2, "Task2", configMINIMAL_STACK_SIZE, NULL, 4, &Task2Handle);
+    xTaskCreate(Task1, "Task1", configMINIMAL_STACK_SIZE, NULL, 1, &Task1Handle);
+    xTaskCreate(Task2, "Task2", configMINIMAL_STACK_SIZE, NULL, 2, &Task2Handle);
     xTaskCreate(Task3, "Task3", configMINIMAL_STACK_SIZE, NULL, 3, &Task3Handle);
-    xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE, NULL, 2, &Task4Handle);
-    xTaskCreate(Task5, "Task5", configMINIMAL_STACK_SIZE, NULL, 1, &Task5Handle);
+    xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE, NULL, 4, &Task4Handle);
+    xTaskCreate(Task5, "Task5", configMINIMAL_STACK_SIZE, NULL, 5, &Task5Handle);
+    xTaskCreate(Task9Scheduler, "Task9Scheduler", configMINIMAL_STACK_SIZE, NULL, 9, &Task9SchedulerHandle);
     vTaskStartScheduler();
 }
 
@@ -130,7 +133,7 @@ void Task3(void* pvParameters) {
     }
 }
 
-/// C = 10 ms
+/// C = 21 ms
 /// D = 40 ms
 /// P = 50 ms
 void Task4(void* pvParameters) {
@@ -160,6 +163,17 @@ void Task5(void* pvParameters) {
     }
 }
 
+void Task9Scheduler(void* pvParameters) {
+    (void)pvParameters;
+
+    TickType_t xLastWakeTime;
+    xLastWakeTime = 0;
+
+    for (;;) {
+        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(1));
+    }
+}
+
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) { Serial.println(pcTaskName); }
 
 void OneShotTimerCallback(TimerHandle_t xTimer) {
@@ -175,7 +189,7 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
     //...and sent data to the host PC
     unsigned int i;
     for (i = 1; i < BUFF_SIZE; i++) {
-		if (t[i] == 0) return;
+		if (t[i] == 0) break;
 
         Serial.println("DAT");
         Serial.print((float)t[i]);
@@ -190,9 +204,11 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
         Serial.print(",");
         Serial.write(circ_buffer5[i]);
         Serial.print(",");
-        Serial.print((float)debug_data1[i]);
+        Serial.write(circ_buffer9[i]);
         Serial.println();
     }
+    Serial.print("Samples: "); 
+    Serial.println(i);
 }
 
 // str_getTime is a custom implementation of the time to debug data
@@ -226,24 +242,6 @@ void str_compute(unsigned long milliseconds) {
     }
 }
 
-const char* taskStateToEmoji(eTaskState state) {
-    switch (state) {
-        case eRunning:
-            return "▶️"; /* A task is querying the state of itself, so must be running. */
-        case eReady:
-            return "⏸️"; /* The task being queried is in a ready or pending ready list. */
-        case eBlocked:
-            return "⏹️"; /* The task being queried is in the Blocked state. */
-        case eSuspended:
-            return "😴"; /* The task being queried is in the Suspended state, or is in the Blocked state with an infinite time out. */
-        case eDeleted:
-            return "😵"; /* The task being queried has been deleted, but its TCB has not yet been freed. */
-        case eInvalid:
-            return "😰"; /* Used as an 'invalid state' value. */
-    }
-    return "invalid";
-}
-
 // str_trace is a hook by the RTOS kernel used after a context-switch-in
 void str_trace(void) {
     circ_buffer_counter++;
@@ -252,10 +250,10 @@ void str_trace(void) {
     }
 
     t[circ_buffer_counter] = str_getTime();  // sent time in milliseconds
-    circ_buffer1[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task1Handle));
-    circ_buffer2[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task2Handle));
-    circ_buffer3[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task3Handle));
-    circ_buffer4[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task4Handle));
-    circ_buffer5[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task5Handle));
-    debug_data1[circ_buffer_counter] = 1.2;
+    circ_buffer1[circ_buffer_counter] = '0' + eTaskGetState(Task1Handle);
+    circ_buffer2[circ_buffer_counter] = '0' + eTaskGetState(Task2Handle);
+    circ_buffer3[circ_buffer_counter] = '0' + eTaskGetState(Task3Handle);
+    circ_buffer4[circ_buffer_counter] = '0' + eTaskGetState(Task4Handle);
+    circ_buffer5[circ_buffer_counter] = '0' + eTaskGetState(Task5Handle);
+    circ_buffer9[circ_buffer_counter] = '0' + eTaskGetState(Task9SchedulerHandle);
 }
