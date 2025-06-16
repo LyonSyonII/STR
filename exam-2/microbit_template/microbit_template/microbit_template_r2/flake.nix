@@ -12,11 +12,11 @@
     {
       devShells.default = pkgs.mkShell rec {
         nativeBuildInputs = with pkgs; [
-
+          
         ];
 
         buildInputs = with pkgs; [
-
+          python3
         ];
 
         LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath nativeBuildInputs;
