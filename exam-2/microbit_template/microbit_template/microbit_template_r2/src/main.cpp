@@ -4,7 +4,8 @@
 #include "task.h"
 #include "timers.h"
 
-#define TSTOP 50000  // Time in milliseconds to stop the kernel
+// #define TSTOP 50000  // Time in milliseconds to stop the kernel
+#define TSTOP 1000  // Time in milliseconds to stop the kernel
 
 const int LED1 = 21;
 const int COL1 = 4;
@@ -28,13 +29,11 @@ int led1State = LOW;
 // circular buffer for debugging
 #define BUFF_SIZE 500
 float t[BUFF_SIZE] = {0};
-char circ_buffer1[BUFF_SIZE] = {0};
-char circ_buffer2[BUFF_SIZE] = {0};
-char circ_buffer3[BUFF_SIZE] = {0};
-char circ_buffer4[BUFF_SIZE] = {0};
-char circ_buffer5[BUFF_SIZE] = {0};
-char circ_buffer6[BUFF_SIZE] = {0};
-char circ_buffer7[BUFF_SIZE] = {0};
+const char* circ_buffer1[BUFF_SIZE] = {0};
+const char* circ_buffer2[BUFF_SIZE] = {0};
+const char* circ_buffer3[BUFF_SIZE] = {0};
+const char* circ_buffer4[BUFF_SIZE] = {0};
+const char* circ_buffer5[BUFF_SIZE] = {0};
 float debug_data1[BUFF_SIZE] = {0};
 unsigned int circ_buffer_counter = 0;
 
@@ -86,28 +85,24 @@ void loop()  // put your main code here, to run repeatedly:
     // delay(500);
 }
 
-void Task1(void* pvParameters)  // This is a task.
-{
+/// C = 2 ms
+/// D = 15 ms
+/// P = 30 ms
+void Task1(void* pvParameters) {
     (void)pvParameters;
 
     TickType_t xLastWakeTime;
     xLastWakeTime = 0;
 
-    for (;;)  // A Task shall never return or exit.
-    {
-        Serial.print("Task1 @ ");
-        Serial.print((int)(xTaskGetTickCount()));
-        Serial.print(" ticks, ");
-        Serial.print(millis());
-        Serial.println(" ms");
-        led1State = led1State ^ 1;
-        digitalWrite(LED1, led1State);
-
-        str_compute(5);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(100));
+    for (;;) {
+        str_compute(2);
+        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(30));
     }
 }
 
+/// C = 4 ms
+/// D = 20 ms
+/// P = 30 ms
 void Task2(void* pvParameters) {
     (void)pvParameters;
 
@@ -115,11 +110,14 @@ void Task2(void* pvParameters) {
     xLastWakeTime = 0;
 
     for (;;) {
-        str_compute(10);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(200));
+        str_compute(4);
+        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(30));
     }
 }
 
+/// C = 10 ms
+/// D = 35 ms
+/// P = 40 ms
 void Task3(void* pvParameters) {
     (void)pvParameters;
 
@@ -127,32 +125,38 @@ void Task3(void* pvParameters) {
     xLastWakeTime = 0;
 
     for (;;) {
-        str_compute(50);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(300));
+        str_compute(10);
+        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(40));
     }
 }
 
-void Task4(void* pvParameters) { 
-	(void)pvParameters;
+/// C = 10 ms
+/// D = 40 ms
+/// P = 50 ms
+void Task4(void* pvParameters) {
+    (void)pvParameters;
 
     TickType_t xLastWakeTime;
     xLastWakeTime = 0;
 
-	for (;;) {
-        str_compute(50);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(300));
+    for (;;) {
+        str_compute(21);
+        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(50));
     }
 }
 
-void Task5(void* pvParameters) { 
-	(void)pvParameters;
-	
+/// C = 5 ms
+/// D = 50 ms
+/// P = 50 ms
+void Task5(void* pvParameters) {
+    (void)pvParameters;
+
     TickType_t xLastWakeTime;
     xLastWakeTime = 0;
 
-	for (;;) {
-        str_compute(50);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(300));
+    for (;;) {
+        str_compute(5);
+        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(50));
     }
 }
 
@@ -170,23 +174,21 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
 
     //...and sent data to the host PC
     unsigned int i;
-    for (i = 0; i < BUFF_SIZE; i++) {
+    for (i = 1; i < BUFF_SIZE; i++) {
+		if (t[i] == 0) return;
+
         Serial.println("DAT");
         Serial.print((float)t[i]);
         Serial.print(",");
-        Serial.write((uint8_t)circ_buffer1[i]);
+        Serial.write(circ_buffer1[i]);
         Serial.print(",");
-        Serial.write((uint8_t)circ_buffer2[i]);
+        Serial.write(circ_buffer2[i]);
         Serial.print(",");
-        Serial.write((uint8_t)circ_buffer3[i]);
+        Serial.write(circ_buffer3[i]);
         Serial.print(",");
-        Serial.write((uint8_t)circ_buffer4[i]);
+        Serial.write(circ_buffer4[i]);
         Serial.print(",");
-        Serial.write((uint8_t)circ_buffer5[i]);
-        Serial.print(",");
-        Serial.write((uint8_t)circ_buffer6[i]);
-        Serial.print(",");
-        Serial.write((uint8_t)circ_buffer7[i]);
+        Serial.write(circ_buffer5[i]);
         Serial.print(",");
         Serial.print((float)debug_data1[i]);
         Serial.println();
@@ -224,6 +226,24 @@ void str_compute(unsigned long milliseconds) {
     }
 }
 
+const char* taskStateToEmoji(eTaskState state) {
+    switch (state) {
+        case eRunning:
+            return "▶️"; /* A task is querying the state of itself, so must be running. */
+        case eReady:
+            return "⏸️"; /* The task being queried is in a ready or pending ready list. */
+        case eBlocked:
+            return "⏹️"; /* The task being queried is in the Blocked state. */
+        case eSuspended:
+            return "😴"; /* The task being queried is in the Suspended state, or is in the Blocked state with an infinite time out. */
+        case eDeleted:
+            return "😵"; /* The task being queried has been deleted, but its TCB has not yet been freed. */
+        case eInvalid:
+            return "😰"; /* Used as an 'invalid state' value. */
+    }
+    return "invalid";
+}
+
 // str_trace is a hook by the RTOS kernel used after a context-switch-in
 void str_trace(void) {
     circ_buffer_counter++;
@@ -232,12 +252,10 @@ void str_trace(void) {
     }
 
     t[circ_buffer_counter] = str_getTime();  // sent time in milliseconds
-    circ_buffer1[circ_buffer_counter] = eTaskGetState(Task1Handle);
-    circ_buffer2[circ_buffer_counter] = eTaskGetState(Task2Handle);
-    circ_buffer3[circ_buffer_counter] = eTaskGetState(Task3Handle);
-    circ_buffer4[circ_buffer_counter] = 0;
-    circ_buffer5[circ_buffer_counter] = 0;
-    circ_buffer6[circ_buffer_counter] = 0;
-    circ_buffer7[circ_buffer_counter] = 0;
+    circ_buffer1[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task1Handle));
+    circ_buffer2[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task2Handle));
+    circ_buffer3[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task3Handle));
+    circ_buffer4[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task4Handle));
+    circ_buffer5[circ_buffer_counter] = taskStateToEmoji(eTaskGetState(Task5Handle));
     debug_data1[circ_buffer_counter] = 1.2;
 }
