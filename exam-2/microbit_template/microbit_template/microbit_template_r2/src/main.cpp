@@ -27,23 +27,51 @@ const int LEDMICRO = 28;
 int led1State = LOW;
 
 // circular buffer for debugging
-#define BUFF_SIZE TSTOP * 5
+const uint8_t N_TASKS = 6;
+const uint8_t N_SCHED_TASKS = N_TASKS - 1;
+
+const size_t BUFF_SIZE = TSTOP * 5;
 float t[BUFF_SIZE] = { };
-char circ_buffer1[BUFF_SIZE] = { };
-char circ_buffer2[BUFF_SIZE] = { };
-char circ_buffer3[BUFF_SIZE] = { };
-char circ_buffer4[BUFF_SIZE] = { };
-char circ_buffer5[BUFF_SIZE] = { };
-char circ_buffer9[BUFF_SIZE] = { };
+char circ_buffers[N_TASKS][BUFF_SIZE] = { };
 unsigned int circ_buffer_counter = 0;
 
 // task handlers
-TaskHandle_t Task1Handle;
-TaskHandle_t Task2Handle;
-TaskHandle_t Task3Handle;
-TaskHandle_t Task4Handle;
-TaskHandle_t Task5Handle;
-TaskHandle_t Task9SchedulerHandle;
+typedef struct {
+    const float deadline;
+    const float period;
+    uint16_t times_run;
+} TaskEDF_t;
+
+float systemStartupTime;
+float maxTraceTime = INT32_MIN;
+float accTraceTime = 0;
+float maxSchedTime = INT32_MIN;
+float accSchedTime = 0;
+
+TaskHandle_t TaskHandles[N_TASKS];
+TaskEDF_t TaskEDF[N_SCHED_TASKS] = {
+    {
+        .deadline = 15,
+        .period = 30,
+    },
+    {
+        .deadline = 20,
+        .period = 30,
+    },
+    {
+        .deadline = 35,
+        .period = 40,
+    },
+    {
+        .deadline = 40,
+        .period = 50,
+    },
+    {
+        .deadline = 50,
+        .period = 50,
+    }
+};
+
 
 // timer handlers
 TimerHandle_t xPeriodicTimer, xOneShotTimer;
@@ -54,11 +82,12 @@ void Task2(void* pvParameters);
 void Task3(void* pvParameters);
 void Task4(void* pvParameters);
 void Task5(void* pvParameters);
-void Task9Scheduler(void* pvParameters);
+void Task9(void* pvParameters);
 void OneShotTimerCallback(TimerHandle_t xTimer);
 
 void str_compute(unsigned long milliseconds);
 void str_trace(void);
+float str_getTime(void);
 
 void setup()  // put your setup code here, to run once:
 {
@@ -66,16 +95,19 @@ void setup()  // put your setup code here, to run once:
     pinMode(COL1, OUTPUT);
     digitalWrite(COL1, LOW);
     Serial.begin(115200);
+    
+    xTaskCreate(Task1, "Task1", configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[0]);
+    xTaskCreate(Task2, "Task2", configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[1]);
+    xTaskCreate(Task3, "Task3", configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[2]);
+    xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[3]);
+    xTaskCreate(Task5, "Task5", configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[4]);
+    xTaskCreate(Task9, "Task9", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES-1, &TaskHandles[N_TASKS-1]);
+
+    vTaskSuspendAll();
 
     xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(TSTOP), pdFALSE, 0, OneShotTimerCallback);
     xOneShotStarted = xTimerStart(xOneShotTimer, 0);
 
-    xTaskCreate(Task1, "Task1", configMINIMAL_STACK_SIZE, NULL, 1, &Task1Handle);
-    xTaskCreate(Task2, "Task2", configMINIMAL_STACK_SIZE, NULL, 2, &Task2Handle);
-    xTaskCreate(Task3, "Task3", configMINIMAL_STACK_SIZE, NULL, 3, &Task3Handle);
-    xTaskCreate(Task4, "Task4", configMINIMAL_STACK_SIZE, NULL, 4, &Task4Handle);
-    xTaskCreate(Task5, "Task5", configMINIMAL_STACK_SIZE, NULL, 5, &Task5Handle);
-    xTaskCreate(Task9Scheduler, "Task9Scheduler", configMINIMAL_STACK_SIZE, NULL, 9, &Task9SchedulerHandle);
     vTaskStartScheduler();
 }
 
@@ -93,13 +125,15 @@ void loop()  // put your main code here, to run repeatedly:
 /// P = 30 ms
 void Task1(void* pvParameters) {
     (void)pvParameters;
+    TaskEDF_t *const task = &TaskEDF[0];
 
-    TickType_t xLastWakeTime;
-    xLastWakeTime = 0;
+    TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
         str_compute(2);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(30));
+
+        task->times_run += 1;
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(30));
     }
 }
 
@@ -108,13 +142,15 @@ void Task1(void* pvParameters) {
 /// P = 30 ms
 void Task2(void* pvParameters) {
     (void)pvParameters;
+    TaskEDF_t *const task = &TaskEDF[1];
 
-    TickType_t xLastWakeTime;
-    xLastWakeTime = 0;
+    TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
         str_compute(4);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(30));
+
+        task->times_run += 1;
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(30));
     }
 }
 
@@ -123,13 +159,15 @@ void Task2(void* pvParameters) {
 /// P = 40 ms
 void Task3(void* pvParameters) {
     (void)pvParameters;
+    TaskEDF_t *const task = &TaskEDF[2];
 
-    TickType_t xLastWakeTime;
-    xLastWakeTime = 0;
+    TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
         str_compute(10);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(40));
+        
+        task->times_run += 1;
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(40));
     }
 }
 
@@ -138,13 +176,15 @@ void Task3(void* pvParameters) {
 /// P = 50 ms
 void Task4(void* pvParameters) {
     (void)pvParameters;
+    TaskEDF_t *const task = &TaskEDF[3];
 
-    TickType_t xLastWakeTime;
-    xLastWakeTime = 0;
+    TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
         str_compute(21);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(50));
+
+        task->times_run += 1;
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
     }
 }
 
@@ -153,28 +193,73 @@ void Task4(void* pvParameters) {
 /// P = 50 ms
 void Task5(void* pvParameters) {
     (void)pvParameters;
+    TaskEDF_t *const task = &TaskEDF[4];
 
-    TickType_t xLastWakeTime;
-    xLastWakeTime = 0;
+    TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
         str_compute(5);
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(50));
+
+        task->times_run += 1;
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
     }
 }
 
-void Task9Scheduler(void* pvParameters) {
+void Task9(void* pvParameters) {
     (void)pvParameters;
 
-    TickType_t xLastWakeTime;
-    xLastWakeTime = 0;
+    systemStartupTime = str_getTime();
 
+    TickType_t xLastWakeTime = xTaskGetTickCount();
+
+    // task1 will always be first
+    uint8_t previous_task = 0;
+
+    // find task with earliest deadline
     for (;;) {
-        vTaskDelayUntil(&xLastWakeTime, pdTICKS_TO_MS(1));
+        float startTime = str_getTime();
+        float now = startTime - systemStartupTime;
+
+        float min_deadline_distance = UINT8_MAX;
+        uint8_t min_task = UINT8_MAX;
+        for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
+            float absolute_deadline = TaskEDF[i].period * (float)TaskEDF[i].times_run + TaskEDF[i].deadline;
+            if (now > absolute_deadline) {
+                delay(500);
+                Serial.print("Task t");
+                Serial.print(i+1);
+                Serial.println(" missed its deadline!");
+                Serial.print("Time = ");
+                Serial.println(now, 10);
+                Serial.print("Deadline = ");
+                Serial.println(absolute_deadline, 10);
+
+                xTimerStop(xOneShotTimer, 1000);
+                OneShotTimerCallback(NULL);
+            }
+            float deadline_distance = absolute_deadline - now;
+            if (deadline_distance < min_deadline_distance) {
+                min_task = i;
+                min_deadline_distance = deadline_distance;
+            }
+        }
+
+        // set priority to tasks
+        vTaskPrioritySet(TaskHandles[previous_task], 0); // lower priority of current task
+        vTaskPrioritySet(TaskHandles[min_task], configMAX_PRIORITIES-2); // set priority of earliest task to maximum
+        previous_task = min_task;
+
+        float schedTime = str_getTime() - startTime;
+        accSchedTime += schedTime;
+        maxSchedTime = max(maxSchedTime, schedTime);
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1));
     }
 }
 
-void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) { Serial.println(pcTaskName); }
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) { 
+    Serial.println(pcTaskName);
+    for (;;);
+}
 
 void OneShotTimerCallback(TimerHandle_t xTimer) {
     TickType_t xTimeNow;
@@ -188,27 +273,35 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
 
     //...and sent data to the host PC
     unsigned int i;
-    for (i = 1; i < BUFF_SIZE; i++) {
+    for (i = 2; i < BUFF_SIZE; i++) {
 		if (t[i] == 0) break;
 
         Serial.println("DAT");
         Serial.print((float)t[i]);
-        Serial.print(",");
-        Serial.write(circ_buffer1[i]);
-        Serial.print(",");
-        Serial.write(circ_buffer2[i]);
-        Serial.print(",");
-        Serial.write(circ_buffer3[i]);
-        Serial.print(",");
-        Serial.write(circ_buffer4[i]);
-        Serial.print(",");
-        Serial.write(circ_buffer5[i]);
-        Serial.print(",");
-        Serial.write(circ_buffer9[i]);
+        for (uint8_t t = 0; t < N_TASKS; t++) {
+            Serial.print(",");
+            Serial.write(circ_buffers[t][i]);
+        }
         Serial.println();
     }
+    Serial.println("---");
     Serial.print("Samples: "); 
     Serial.println(i);
+
+    Serial.print("System Startup Time: ");
+    Serial.println(systemStartupTime);
+
+    Serial.print("Max Trace Time: ");
+    Serial.println(maxTraceTime, 10);
+    Serial.print("Acc Trace Time: ");
+    Serial.println(accTraceTime, 2);
+
+    Serial.print("Max Sched Time: ");
+    Serial.println(maxSchedTime, 10);
+    Serial.print("Acc Sched Time: ");
+    Serial.println(accSchedTime, 2);
+
+    for (;;);
 }
 
 // str_getTime is a custom implementation of the time to debug data
@@ -224,7 +317,7 @@ float str_getTime(void) {
     // #define portNVIC_SYSTICK_CURRENT_VALUE_REG    ( *( ( volatile uint32_t * ) 0xe000e018 ) )
     volatile uint32_t portNVIC_SYSTICK_CURRENT_VALUE_REG = (*((volatile uint32_t*)0xe000e018));
 
-    // float t=micros();//ok
+    // float t=(float)micros() / 1000.f;//ok
     // float t=millis();//not so precise
     float t = 0.0000015625 * ((640000 - portNVIC_SYSTICK_CURRENT_VALUE_REG) + xTaskGetTickCount() * 640000);
     //(float)(0.5e-3*((float)OCR1A*xTaskGetTickCount()+TCNT1));//Sent time in milliseconds!!!
@@ -244,16 +337,19 @@ void str_compute(unsigned long milliseconds) {
 
 // str_trace is a hook by the RTOS kernel used after a context-switch-in
 void str_trace(void) {
+    float startTime = str_getTime();
+
     circ_buffer_counter++;
     if (circ_buffer_counter >= BUFF_SIZE) {
         circ_buffer_counter = 0;
     }
 
     t[circ_buffer_counter] = str_getTime();  // sent time in milliseconds
-    circ_buffer1[circ_buffer_counter] = '0' + eTaskGetState(Task1Handle);
-    circ_buffer2[circ_buffer_counter] = '0' + eTaskGetState(Task2Handle);
-    circ_buffer3[circ_buffer_counter] = '0' + eTaskGetState(Task3Handle);
-    circ_buffer4[circ_buffer_counter] = '0' + eTaskGetState(Task4Handle);
-    circ_buffer5[circ_buffer_counter] = '0' + eTaskGetState(Task5Handle);
-    circ_buffer9[circ_buffer_counter] = '0' + eTaskGetState(Task9SchedulerHandle);
+    for (int i = 0; i < N_TASKS; i++) {
+        circ_buffers[i][circ_buffer_counter] = '0' + eTaskGetState(TaskHandles[i]); 
+    }
+
+    float time = str_getTime() - startTime;
+    accTraceTime += time;
+    maxTraceTime = max(maxTraceTime, time);
 }

@@ -1,8 +1,8 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import argparse
 import sys
 import io
+import glob
 
 # Only show relevant task states
 STATE_LABELS = {
@@ -18,6 +18,7 @@ SPECS = {
     'task3': {'C': 10, 'D': 35, 'T': 40},
     'task4': {'C': 21, 'D': 40, 'T': 50},
     'task5': {'C': 5,  'D': 50, 'T': 50},
+    'task6': {'C': 1,  'D': 1, 'T': 1},
 }
 
 
@@ -114,25 +115,29 @@ def plot_task_states(df, time_col='time'):
     plt.tight_layout(rect=[0, 0.03, 1, 0.97])
     plt.show()
 
+def get_file():
+    files = glob.glob("logs/*.log")
+    files.sort(reverse=True)
+    return files[0]
 
 def main():
-    parser = argparse.ArgumentParser(description='Plot task states from CSV data.')
-    parser.add_argument('--file', '-f', default='data.csv', help='Path to CSV data file')
-    parser.add_argument('--time-col', '-t', default='time', help='Name of the time column')
-    args = parser.parse_args()
+    file = get_file();
 
     try:
-        with open(args.file, 'r', encoding='utf-8') as f:
+        with open(file, 'r', encoding='utf-8') as f:
             lines = [line.strip() for line in f if line.strip() and not line.startswith('DAT')]
         raw_data = [line for line in lines if line]
         sample_row = raw_data[0].split(',')
         n_cols = len(sample_row)
         column_names = ['time'] + [f'task{i+1}' for i in range(n_cols - 1)]
 
-        df = pd.read_csv(io.StringIO("\n".join(raw_data)), header=None, names=column_names)
+        footer_lines = list(reversed(raw_data)).index("---") + 1
+        print(raw_data[0:-footer_lines])
+
+        df = pd.read_csv(io.StringIO("\n".join(raw_data)), header=None, names=column_names, skipfooter=footer_lines)
         df['time'] = df['time'].astype(float)
     except Exception as e:
-        print(f"Error reading or preprocessing file '{args.file}': {e}", file=sys.stderr)
+        print(f"Error reading or preprocessing file '{file}': {e}", file=sys.stderr)
         sys.exit(1)
 
     plot_task_states(df, time_col='time')
