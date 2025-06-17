@@ -32,6 +32,7 @@ void Task2(void* pvParameters);
 void Task3(void* pvParameters);
 void Task4(void* pvParameters);
 void Task5(void* pvParameters);
+void Task9Scheduler(void* pvParameters);
 void OneShotTimerCallback(TimerHandle_t xTimer);
 
 void str_compute(unsigned long milliseconds);
@@ -70,8 +71,8 @@ TaskEDF_t TaskEDF[] = {
         .taskCode = Task3,
         .deadline = 35,
         .period = 40,
-    },
-  {
+    },/*
+    {
         .name = "Task4",
         .taskCode = Task4,
         .deadline = 40,
@@ -82,18 +83,18 @@ TaskEDF_t TaskEDF[] = {
         .taskCode = Task5,
         .deadline = 50,
         .period = 50,
-    },
+    }, */
 };
 const uint8_t N_SCHED_TASKS = sizeof(TaskEDF) / sizeof(TaskEDF_t);
 
 TaskDeadline_t TaskDeadlines[N_SCHED_TASKS] = {};
 TaskHandle_t TaskHandles[N_SCHED_TASKS] = {};
+TaskHandle_t Task9SchedulerHandle;
 
 // circular buffer for debugging
-
 const size_t BUFF_SIZE = TSTOP * 5;
-float t[BUFF_SIZE] = { };
-char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = { };
+float t[BUFF_SIZE] = {};
+char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = {};
 unsigned int circ_buffer_counter = 0;
 
 // task handlers
@@ -113,17 +114,15 @@ void setup()  // put your setup code here, to run once:
     pinMode(COL1, OUTPUT);
     digitalWrite(COL1, LOW);
     Serial.begin(115200);
-    
+
     for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
         TaskEDF_t* task = &TaskEDF[i];
         xTaskCreate(task->taskCode, task->name, configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[i]);
         task->handle = TaskHandles[i];
         task->remaining_deadline = task->deadline;
-        TaskDeadlines[i] = {
-            .edf = task
-        };
+        TaskDeadlines[i] = {.edf = task};
     }
-    // xTaskCreate(Task9, "Task9", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES-1, &TaskHandles[N_TASKS-1]);
+    xTaskCreate(Task9Scheduler, "Task9", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, &Task9SchedulerHandle);
 
     xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(TSTOP), pdFALSE, 0, OneShotTimerCallback);
     xOneShotStarted = xTimerStart(xOneShotTimer, 0);
@@ -146,7 +145,7 @@ void loop()  // put your main code here, to run repeatedly:
 void Task1(void* pvParameters) {
     (void)pvParameters;
 
-    TickType_t xLastWakeTime = xTaskGetTickCount();
+    TickType_t xLastWakeTime = 0;
 
     for (;;) {
         str_compute(2);
@@ -161,7 +160,7 @@ void Task1(void* pvParameters) {
 void Task2(void* pvParameters) {
     (void)pvParameters;
 
-    TickType_t xLastWakeTime = xTaskGetTickCount();
+    TickType_t xLastWakeTime = 0;
 
     for (;;) {
         str_compute(4);
@@ -176,11 +175,11 @@ void Task2(void* pvParameters) {
 void Task3(void* pvParameters) {
     (void)pvParameters;
 
-    TickType_t xLastWakeTime = xTaskGetTickCount();
+    TickType_t xLastWakeTime = 0;
 
     for (;;) {
         str_compute(10);
-        
+
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(40));
     }
 }
@@ -191,7 +190,7 @@ void Task3(void* pvParameters) {
 void Task4(void* pvParameters) {
     (void)pvParameters;
 
-    TickType_t xLastWakeTime = xTaskGetTickCount();
+    TickType_t xLastWakeTime = 0;
 
     for (;;) {
         str_compute(21);
@@ -206,7 +205,7 @@ void Task4(void* pvParameters) {
 void Task5(void* pvParameters) {
     (void)pvParameters;
 
-    TickType_t xLastWakeTime = xTaskGetTickCount();
+    TickType_t xLastWakeTime = 0;
 
     for (;;) {
         str_compute(5);
@@ -226,24 +225,30 @@ int cmpDeadlines(const void* a, const void* b) {
     return 0;
 }
 
-void vApplicationTickHook(void) {
-    std::qsort(TaskDeadlines, N_SCHED_TASKS, sizeof(TaskDeadline_t), cmpDeadlines);
+void Task9Scheduler(void* arg) {
+    (void)arg;
 
-    for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
-        TaskEDF_t* edf = TaskDeadlines[i].edf;
-        eTaskState state = eTaskGetState(edf->handle);
-        if (edf->remaining_deadline == 0) {
-            edf->remaining_deadline = edf->deadline;
-        } else if (state == eReady || state == eRunning) {
-            edf->remaining_deadline -= 1;
+    for (;;) {
+        std::qsort(TaskDeadlines, N_SCHED_TASKS, sizeof(TaskDeadline_t), cmpDeadlines);
+
+        for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
+            TaskEDF_t* edf = TaskDeadlines[i].edf;
+            eTaskState state = eTaskGetState(edf->handle);
+            if (edf->remaining_deadline == 0 && state == eBlocked) {
+                edf->remaining_deadline = edf->deadline;
+            } else if (state == eReady || state == eRunning) {
+                edf->remaining_deadline -= 1;
+            }
+            vTaskPrioritySet(TaskDeadlines[i].edf->handle, configMAX_PRIORITIES - 2 - i);
         }
-        vTaskPrioritySet(TaskDeadlines[i].edf->handle, configMAX_PRIORITIES - 2 - i);
-    }
 
-    portYIELD_FROM_ISR(pdFALSE);
+        vTaskSuspend(NULL);
+    }
 }
 
-void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) { 
+void vApplicationTickHook(void) { xTaskResumeFromISR(Task9SchedulerHandle); }
+
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) {
     Serial.println(pcTaskName);
     for (;;);
 }
@@ -261,7 +266,7 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
     //...and sent data to the host PC
     unsigned int i;
     for (i = 2; i < BUFF_SIZE; i++) {
-		if (t[i] == 0) break;
+        if (t[i] == 0) break;
 
         Serial.println("DAT");
         Serial.print((float)t[i]);
@@ -272,7 +277,7 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
         Serial.println();
     }
     Serial.println("---");
-    Serial.print("Samples: "); 
+    Serial.print("Samples: ");
     Serial.println(i);
 
     Serial.print("System Startup Time: ");
@@ -333,7 +338,7 @@ void str_trace(void) {
 
     t[circ_buffer_counter] = str_getTime();  // sent time in milliseconds
     for (int i = 0; i < N_SCHED_TASKS; i++) {
-        circ_buffers[i][circ_buffer_counter] = '0' + eTaskGetState(TaskHandles[i]); 
+        circ_buffers[i][circ_buffer_counter] = '0' + eTaskGetState(TaskHandles[i]);
     }
 
     // float time = str_getTime() - startTime;
