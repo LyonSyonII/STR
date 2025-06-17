@@ -9,7 +9,7 @@ STATE_LABELS = {
     0: 'Running',
     1: 'Ready',
     2: 'Blocked',
-    3: 'Suspended'
+    # 3: 'Suspended'
 }
 
 # Expected specs for each task (computation, deadline, period)
