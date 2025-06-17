@@ -39,7 +39,7 @@ unsigned int circ_buffer_counter = 0;
 typedef struct {
     const float deadline;
     const float period;
-    uint16_t times_run;
+    float next_deadline;
 } TaskEDF_t;
 
 float systemStartupTime;
@@ -53,23 +53,28 @@ TaskEDF_t TaskEDF[N_SCHED_TASKS] = {
     {
         .deadline = 15,
         .period = 30,
+        .next_deadline = 15,
     },
     {
         .deadline = 20,
         .period = 30,
+        .next_deadline = 15,
     },
     {
         .deadline = 35,
         .period = 40,
+        .next_deadline = 15,
     },
     {
         .deadline = 40,
         .period = 50,
+        .next_deadline = 15,
     },
     {
         .deadline = 50,
         .period = 50,
-    }
+        .next_deadline = 15,
+    },
 };
 
 
@@ -103,7 +108,9 @@ void setup()  // put your setup code here, to run once:
     xTaskCreate(Task5, "Task5", configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[4]);
     xTaskCreate(Task9, "Task9", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES-1, &TaskHandles[N_TASKS-1]);
 
-    vTaskSuspendAll();
+    for (uint8_t i = 1; i < N_SCHED_TASKS; i++) {
+        vTaskSuspend(TaskHandles[i]);
+    }
 
     xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(TSTOP), pdFALSE, 0, OneShotTimerCallback);
     xOneShotStarted = xTimerStart(xOneShotTimer, 0);
@@ -130,9 +137,9 @@ void Task1(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
+        task->next_deadline = str_getTime() + task->deadline;
         str_compute(2);
 
-        task->times_run += 1;
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(30));
     }
 }
@@ -147,9 +154,9 @@ void Task2(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
+        task->next_deadline = str_getTime() + task->deadline;
         str_compute(4);
 
-        task->times_run += 1;
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(30));
     }
 }
@@ -164,9 +171,9 @@ void Task3(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
+        task->next_deadline = str_getTime() + task->deadline;
         str_compute(10);
         
-        task->times_run += 1;
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(40));
     }
 }
@@ -181,9 +188,9 @@ void Task4(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
+        task->next_deadline = str_getTime() + task->deadline;
         str_compute(21);
 
-        task->times_run += 1;
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
     }
 }
@@ -198,9 +205,9 @@ void Task5(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
+        task->next_deadline = str_getTime() + task->deadline;
         str_compute(5);
 
-        task->times_run += 1;
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
     }
 }
@@ -223,8 +230,13 @@ void Task9(void* pvParameters) {
         float min_deadline_distance = UINT8_MAX;
         uint8_t min_task = UINT8_MAX;
         for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
-            float absolute_deadline = TaskEDF[i].period * (float)TaskEDF[i].times_run + TaskEDF[i].deadline;
-            if (now > absolute_deadline) {
+            TaskHandle_t handle = TaskHandles[i];
+            eTaskState state = eTaskGetState(handle);
+            if (state != eSuspended) continue;
+
+            TaskEDF_t *const task = &TaskEDF[i];
+
+            if (now > task->next_deadline) {
                 delay(500);
                 Serial.print("Task t");
                 Serial.print(i+1);
@@ -232,12 +244,13 @@ void Task9(void* pvParameters) {
                 Serial.print("Time = ");
                 Serial.println(now, 10);
                 Serial.print("Deadline = ");
-                Serial.println(absolute_deadline, 10);
+                Serial.println(task->next_deadline, 10);
+                Serial.println("###");
 
                 xTimerStop(xOneShotTimer, 1000);
                 OneShotTimerCallback(NULL);
             }
-            float deadline_distance = absolute_deadline - now;
+            float deadline_distance = task->next_deadline - now;
             if (deadline_distance < min_deadline_distance) {
                 min_task = i;
                 min_deadline_distance = deadline_distance;
@@ -245,8 +258,13 @@ void Task9(void* pvParameters) {
         }
 
         // set priority to tasks
-        vTaskPrioritySet(TaskHandles[previous_task], 0); // lower priority of current task
-        vTaskPrioritySet(TaskHandles[min_task], configMAX_PRIORITIES-2); // set priority of earliest task to maximum
+        // vTaskPrioritySet(TaskHandles[previous_task], 0); // lower priority of current task
+        // vTaskPrioritySet(TaskHandles[min_task], configMAX_PRIORITIES-2); // set priority of earliest task to maximum
+
+        if (min_task < N_SCHED_TASKS && previous_task != min_task) {
+            vTaskSuspend(TaskHandles[previous_task]);
+            vTaskResume(TaskHandles[min_task]);
+        }
         previous_task = min_task;
 
         float schedTime = str_getTime() - startTime;

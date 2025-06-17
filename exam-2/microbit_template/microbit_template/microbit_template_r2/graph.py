@@ -8,7 +8,8 @@ import glob
 STATE_LABELS = {
     0: 'Running',
     1: 'Ready',
-    2: 'Blocked'
+    2: 'Blocked',
+    3: 'Suspended'
 }
 
 # Expected specs for each task (computation, deadline, period)
@@ -127,14 +128,25 @@ def main():
         with open(file, 'r', encoding='utf-8') as f:
             lines = [line.strip() for line in f if line.strip() and not line.startswith('DAT')]
         raw_data = [line for line in lines if line]
+        
+        try:
+            data_start = raw_data.index("###") + 1
+        except:
+            data_start = 0
+            
+        try:
+            data_end = raw_data.index("---", data_start)
+        except:
+            data_end = -1
+            
+        raw_data = raw_data[data_start:data_end]
+         
         sample_row = raw_data[0].split(',')
         n_cols = len(sample_row)
         column_names = ['time'] + [f'task{i+1}' for i in range(n_cols - 1)]
 
-        footer_lines = list(reversed(raw_data)).index("---") + 1
-        print(raw_data[0:-footer_lines])
 
-        df = pd.read_csv(io.StringIO("\n".join(raw_data)), header=None, names=column_names, skipfooter=footer_lines)
+        df = pd.read_csv(io.StringIO("\n".join(raw_data)), header=None, names=column_names)
         df['time'] = df['time'].astype(float)
     except Exception as e:
         print(f"Error reading or preprocessing file '{file}': {e}", file=sys.stderr)
