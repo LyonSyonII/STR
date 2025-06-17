@@ -32,7 +32,6 @@ void Task2(void* pvParameters);
 void Task3(void* pvParameters);
 void Task4(void* pvParameters);
 void Task5(void* pvParameters);
-void Task9(void* pvParameters);
 void OneShotTimerCallback(TimerHandle_t xTimer);
 
 void str_compute(unsigned long milliseconds);
@@ -43,11 +42,17 @@ float str_getTime(void);
 typedef struct {
     const char* name;
     const TaskFunction_t taskCode;
-    const float deadline;
-    const float period;
+    const uint8_t deadline;
+    const uint8_t period;
+    uint8_t remaining_deadline;
+    TaskHandle_t handle;
 } TaskEDF_t;
 
-const TaskEDF_t TaskEDF[] = {
+typedef struct {
+    TaskEDF_t* edf;
+} TaskDeadline_t;
+
+TaskEDF_t TaskEDF[] = {
     {
         .name = "Task1",
         .taskCode = Task1,
@@ -72,24 +77,23 @@ const TaskEDF_t TaskEDF[] = {
         .deadline = 40,
         .period = 50,
     },
-/*    {
+    {
         .name = "Task5",
         .taskCode = Task5,
         .deadline = 50,
         .period = 50,
-    }, */
+    },
 };
 const uint8_t N_SCHED_TASKS = sizeof(TaskEDF) / sizeof(TaskEDF_t);
-const uint8_t N_TASKS =  N_SCHED_TASKS + 1;
 
-uint8_t TaskDeadlines[N_TASKS] = {};
-TaskHandle_t TaskHandles[N_TASKS] = {};
+TaskDeadline_t TaskDeadlines[N_SCHED_TASKS] = {};
+TaskHandle_t TaskHandles[N_SCHED_TASKS] = {};
 
 // circular buffer for debugging
 
 const size_t BUFF_SIZE = TSTOP * 5;
 float t[BUFF_SIZE] = { };
-char circ_buffers[N_TASKS][BUFF_SIZE] = { };
+char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = { };
 unsigned int circ_buffer_counter = 0;
 
 // task handlers
@@ -111,11 +115,15 @@ void setup()  // put your setup code here, to run once:
     Serial.begin(115200);
     
     for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
-        TaskEDF_t task = TaskEDF[i];
-        xTaskCreate(task.taskCode, task.name, configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[i]);
-        TaskDeadlines[i] = TaskEDF[i].deadline;
+        TaskEDF_t* task = &TaskEDF[i];
+        xTaskCreate(task->taskCode, task->name, configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[i]);
+        task->handle = TaskHandles[i];
+        task->remaining_deadline = task->deadline;
+        TaskDeadlines[i] = {
+            .edf = task
+        };
     }
-    xTaskCreate(Task9, "Task9", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES-1, &TaskHandles[N_TASKS-1]);
+    // xTaskCreate(Task9, "Task9", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES-1, &TaskHandles[N_TASKS-1]);
 
     xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(TSTOP), pdFALSE, 0, OneShotTimerCallback);
     xOneShotStarted = xTimerStart(xOneShotTimer, 0);
@@ -141,9 +149,7 @@ void Task1(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        TaskDeadlines[0] = TaskEDF[0].deadline;
-        str_compute(1);
-        str_compute(1);
+        str_compute(2);
 
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(30));
     }
@@ -158,7 +164,6 @@ void Task2(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        TaskDeadlines[1] = TaskEDF[1].deadline;
         str_compute(4);
 
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(30));
@@ -174,7 +179,6 @@ void Task3(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        TaskDeadlines[2] = TaskEDF[2].deadline;
         str_compute(10);
         
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(40));
@@ -190,7 +194,6 @@ void Task4(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        TaskDeadlines[3] = TaskEDF[3].deadline;
         str_compute(21);
 
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
@@ -206,65 +209,38 @@ void Task5(void* pvParameters) {
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     for (;;) {
-        TaskDeadlines[4] = TaskEDF[4].deadline;
         str_compute(5);
 
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
     }
 }
 
-void Task9(void* pvParameters) {
-    (void)pvParameters;
-
-    systemStartupTime = str_getTime();
-
-    TickType_t xLastWakeTime = xTaskGetTickCount();
-
-    uint8_t previous_task = UINT8_MAX;
-
-    // find task with earliest deadline
-    for (;;) {
-        float startTime = str_getTime();
-
-        uint8_t min_next_deadline = UINT8_MAX;
-        uint8_t min_task = UINT8_MAX;
-        for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
-            uint8_t *const task = &TaskDeadlines[i];
-            if (*task == 0) continue;
-            *task -= 1;
-/* 
-            if (now > task->next_deadline) {
-                delay(500);
-                Serial.print("Task t");
-                Serial.print(i+1);
-                Serial.println(" missed its deadline!");
-                Serial.print("Time = ");
-                Serial.println(now, 10);
-                Serial.print("Deadline = ");
-                Serial.println(task->next_deadline, 10);
-                Serial.println("###");
-
-                xTimerStop(xOneShotTimer, 1000);
-                OneShotTimerCallback(NULL);
-            } */
-            // float deadline_distance = task->next_deadline - now;
-            if (*task < min_next_deadline) {
-                min_task = i;
-                min_next_deadline = *task;
-            }
-        }
-
-        if (min_task != UINT8_MAX && previous_task != min_task) {
-            if (previous_task < N_SCHED_TASKS) vTaskPrioritySet(TaskHandles[previous_task], 1);
-            vTaskPrioritySet(TaskHandles[min_task], configMAX_PRIORITIES-2);
-            previous_task = min_task;
-        }
-
-        float schedTime = str_getTime() - startTime;
-        accSchedTime += schedTime;
-        maxSchedTime = max(maxSchedTime, schedTime);
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(1));
+int cmpDeadlines(const void* a, const void* b) {
+    const auto arg1 = static_cast<const TaskDeadline_t*>(a)->edf->remaining_deadline;
+    const auto arg2 = static_cast<const TaskDeadline_t*>(b)->edf->remaining_deadline;
+    if (arg1 < arg2) {
+        return -1;
+    } else if (arg1 > arg2) {
+        return 1;
     }
+    return 0;
+}
+
+void vApplicationTickHook(void) {
+    std::qsort(TaskDeadlines, N_SCHED_TASKS, sizeof(TaskDeadline_t), cmpDeadlines);
+
+    for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
+        TaskEDF_t* edf = TaskDeadlines[i].edf;
+        eTaskState state = eTaskGetState(edf->handle);
+        if (edf->remaining_deadline == 0) {
+            edf->remaining_deadline = edf->deadline;
+        } else if (state == eReady || state == eRunning) {
+            edf->remaining_deadline -= 1;
+        }
+        vTaskPrioritySet(TaskDeadlines[i].edf->handle, configMAX_PRIORITIES - 2 - i);
+    }
+
+    portYIELD_FROM_ISR(pdFALSE);
 }
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) { 
@@ -289,7 +265,7 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
 
         Serial.println("DAT");
         Serial.print((float)t[i]);
-        for (uint8_t t = 0; t < N_TASKS; t++) {
+        for (uint8_t t = 0; t < N_SCHED_TASKS; t++) {
             Serial.print(",");
             Serial.write(circ_buffers[t][i]);
         }
@@ -348,7 +324,7 @@ void str_compute(unsigned long milliseconds) {
 
 // str_trace is a hook by the RTOS kernel used after a context-switch-in
 void str_trace(void) {
-    float startTime = str_getTime();
+    // float startTime = str_getTime();
 
     circ_buffer_counter++;
     if (circ_buffer_counter >= BUFF_SIZE) {
@@ -356,11 +332,11 @@ void str_trace(void) {
     }
 
     t[circ_buffer_counter] = str_getTime();  // sent time in milliseconds
-    for (int i = 0; i < N_TASKS; i++) {
+    for (int i = 0; i < N_SCHED_TASKS; i++) {
         circ_buffers[i][circ_buffer_counter] = '0' + eTaskGetState(TaskHandles[i]); 
     }
 
-    float time = str_getTime() - startTime;
-    accTraceTime += time;
-    maxTraceTime = max(maxTraceTime, time);
+    // float time = str_getTime() - startTime;
+    // accTraceTime += time;
+    // maxTraceTime = max(maxTraceTime, time);
 }
