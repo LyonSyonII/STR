@@ -45,6 +45,7 @@ typedef struct {
     const TaskFunction_t taskCode;
     const uint8_t deadline;
     const uint8_t period;
+    TickType_t lastActivationTick;
     uint8_t remaining_deadline;
     TaskHandle_t handle;
 } TaskEDF_t;
@@ -71,7 +72,7 @@ TaskEDF_t TaskEDF[] = {
         .taskCode = Task3,
         .deadline = 35,
         .period = 40,
-    },/*
+    },
     {
         .name = "Task4",
         .taskCode = Task4,
@@ -83,13 +84,12 @@ TaskEDF_t TaskEDF[] = {
         .taskCode = Task5,
         .deadline = 50,
         .period = 50,
-    }, */
+    },
 };
 const uint8_t N_SCHED_TASKS = sizeof(TaskEDF) / sizeof(TaskEDF_t);
 
 TaskDeadline_t TaskDeadlines[N_SCHED_TASKS] = {};
-TaskHandle_t TaskHandles[N_SCHED_TASKS] = {};
-TaskHandle_t Task9SchedulerHandle;
+TaskHandle_t TaskHandles[N_SCHED_TASKS+1] = {};
 
 // circular buffer for debugging
 const size_t BUFF_SIZE = TSTOP * 5;
@@ -122,7 +122,7 @@ void setup()  // put your setup code here, to run once:
         task->remaining_deadline = task->deadline;
         TaskDeadlines[i] = {.edf = task};
     }
-    xTaskCreate(Task9Scheduler, "Task9", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, &Task9SchedulerHandle);
+    xTaskCreate(Task9Scheduler, "Task9", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, &TaskHandles[N_SCHED_TASKS]);
 
     xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(TSTOP), pdFALSE, 0, OneShotTimerCallback);
     xOneShotStarted = xTimerStart(xOneShotTimer, 0);
@@ -229,16 +229,31 @@ void Task9Scheduler(void* arg) {
     (void)arg;
 
     for (;;) {
-        std::qsort(TaskDeadlines, N_SCHED_TASKS, sizeof(TaskDeadline_t), cmpDeadlines);
+        TickType_t now = xTaskGetTickCount();
 
+        
         for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
             TaskEDF_t* edf = TaskDeadlines[i].edf;
             eTaskState state = eTaskGetState(edf->handle);
-            if (edf->remaining_deadline == 0 && state == eBlocked) {
-                edf->remaining_deadline = edf->deadline;
-            } else if (state == eReady || state == eRunning) {
-                edf->remaining_deadline -= 1;
+            if (state == eReady || state == eRunning) {
+                if (edf->remaining_deadline > 0) edf->remaining_deadline -= 1;
+                else {
+                    Serial.print(edf->name);
+                    Serial.println(" missed deadline");
+                    for (;;);
+                    // deadline missed
+                }
             }
+            
+            if (now - edf->lastActivationTick >= edf->period) {
+                edf->lastActivationTick = now;
+                edf->remaining_deadline = edf->deadline;
+            }
+        }
+
+        std::qsort(TaskDeadlines, N_SCHED_TASKS, sizeof(TaskDeadline_t), cmpDeadlines);
+        
+        for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
             vTaskPrioritySet(TaskDeadlines[i].edf->handle, configMAX_PRIORITIES - 2 - i);
         }
 
@@ -246,7 +261,9 @@ void Task9Scheduler(void* arg) {
     }
 }
 
-void vApplicationTickHook(void) { xTaskResumeFromISR(Task9SchedulerHandle); }
+void vApplicationTickHook(void) {
+    xTaskResumeFromISR(TaskHandles[N_SCHED_TASKS]);
+}
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) {
     Serial.println(pcTaskName);
@@ -254,9 +271,6 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) {
 }
 
 void OneShotTimerCallback(TimerHandle_t xTimer) {
-    TickType_t xTimeNow;
-    xTimeNow = xTaskGetTickCount();
-
     str_trace();
     // Stop the kernel...
     vTaskSuspendAll();
