@@ -87,14 +87,15 @@ TaskEDF_t TaskEDF[] = {
     },
 };
 const uint8_t N_SCHED_TASKS = sizeof(TaskEDF) / sizeof(TaskEDF_t);
+const uint8_t N_TASKS = N_SCHED_TASKS + 1;
 
 TaskDeadline_t TaskDeadlines[N_SCHED_TASKS] = {};
-TaskHandle_t TaskHandles[N_SCHED_TASKS+1] = {};
+TaskHandle_t TaskHandles[N_TASKS] = {};
 
 // circular buffer for debugging
 const size_t BUFF_SIZE = TSTOP * 5;
 float t[BUFF_SIZE] = {};
-char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = {};
+char circ_buffers[N_TASKS][BUFF_SIZE] = {};
 unsigned int circ_buffer_counter = 0;
 
 // task handlers
@@ -229,25 +230,38 @@ void Task9Scheduler(void* arg) {
     (void)arg;
 
     for (;;) {
-        TickType_t now = xTaskGetTickCount();
+        float startTime = str_getTime();
 
+        TickType_t now = xTaskGetTickCount();
         
         for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
             TaskEDF_t* edf = TaskDeadlines[i].edf;
             eTaskState state = eTaskGetState(edf->handle);
-            if (state == eReady || state == eRunning) {
-                if (edf->remaining_deadline > 0) edf->remaining_deadline -= 1;
-                else {
-                    Serial.print(edf->name);
-                    Serial.println(" missed deadline");
-                    for (;;);
-                    // deadline missed
-                }
-            }
-            
             if (now - edf->lastActivationTick >= edf->period) {
                 edf->lastActivationTick = now;
                 edf->remaining_deadline = edf->deadline;
+            }
+            if (state == eReady || state == eRunning) {
+                if (edf->remaining_deadline > 0) edf->remaining_deadline -= 1;
+                else if (false) {
+                    // Si s'activa la branca es perd el deadline immediatament
+                    // Si es desactiva, podem veure que no és el cas amb el graf
+
+                    str_compute(500);
+                    // deadline missed
+                    Serial.print(edf->name);
+                    Serial.println(" missed deadline");
+                    Serial.print("Deadline: ");
+                    Serial.println((uint32_t)edf->lastActivationTick + edf->deadline);
+                    Serial.print("Now: ");
+                    Serial.println((uint32_t)now);
+                    Serial.println("###");
+
+                    xTimerStop(xOneShotTimer, 0);
+                    OneShotTimerCallback(NULL);
+
+                    for (;;);
+                }
             }
         }
 
@@ -256,6 +270,10 @@ void Task9Scheduler(void* arg) {
         for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
             vTaskPrioritySet(TaskDeadlines[i].edf->handle, configMAX_PRIORITIES - 2 - i);
         }
+
+        float time = str_getTime() - startTime;
+        accSchedTime += time;
+        maxSchedTime = max(maxSchedTime, time);
 
         vTaskSuspend(NULL);
     }
@@ -284,7 +302,7 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
 
         Serial.println("DAT");
         Serial.print((float)t[i]);
-        for (uint8_t t = 0; t < N_SCHED_TASKS; t++) {
+        for (uint8_t t = 0; t < N_TASKS; t++) {
             Serial.print(",");
             Serial.write(circ_buffers[t][i]);
         }
@@ -343,7 +361,7 @@ void str_compute(unsigned long milliseconds) {
 
 // str_trace is a hook by the RTOS kernel used after a context-switch-in
 void str_trace(void) {
-    // float startTime = str_getTime();
+    float startTime = str_getTime();
 
     circ_buffer_counter++;
     if (circ_buffer_counter >= BUFF_SIZE) {
@@ -355,7 +373,10 @@ void str_trace(void) {
         circ_buffers[i][circ_buffer_counter] = '0' + eTaskGetState(TaskHandles[i]);
     }
 
-    // float time = str_getTime() - startTime;
-    // accTraceTime += time;
-    // maxTraceTime = max(maxTraceTime, time);
+    // workaround to get graph to work properly
+    circ_buffers[N_SCHED_TASKS][circ_buffer_counter] = eTaskGetState(TaskHandles[N_SCHED_TASKS]) == eSuspended ? '2' : '0';
+
+    float time = str_getTime() - startTime;
+    accTraceTime += time;
+    maxTraceTime = max(maxTraceTime, time);
 }
