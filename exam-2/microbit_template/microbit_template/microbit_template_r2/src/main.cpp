@@ -4,7 +4,9 @@
 #include "task.h"
 #include "timers.h"
 
-#define TSTOP 4600  // Time in milliseconds to stop the kernel
+// TSTOP => [1000, 5500]
+// If surpassed the trace buffer won't have enough space to save every context change
+#define TSTOP 5500  // Time in milliseconds to stop the kernel
 // #define TSTOP 1000  // Time in milliseconds to stop the kernel
 
 void Task(void* pvParameters);
@@ -82,11 +84,10 @@ static TaskDeadline_t TaskDeadlines[N_SCHED_TASKS];
 static TaskHandle_t TaskHandles[N_TASKS] = {};
 
 // circular buffer for debugging
-// const size_t BUFF_SIZE = TSTOP * 5;
-const size_t BUFF_SIZE = 10000;
+const size_t BUFF_SIZE = ((float)TSTOP * 2.14);
 static float t[BUFF_SIZE] = {};
 static char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = {};
-static unsigned int circ_buffer_counter = 0;
+static size_t circ_buffer_counter = 0;
 
 // task handlers
 static float systemStartupTime;
