@@ -4,28 +4,10 @@
 #include "task.h"
 #include "timers.h"
 
-#define TSTOP 4600  // Time in milliseconds to stop the kernel
+// #define TSTOP 4600  // Time in milliseconds to stop the kernel
 // #define TSTOP 1000  // Time in milliseconds to stop the kernel
+#define TSTOP 1000
 
-const int LED1 = 21;
-const int COL1 = 4;
-
-// matrix leds
-const int ROW1_PORT_BIT = 21;
-const int ROW2_PORT_BIT = 22;
-const int ROW3_PORT_BIT = 23;
-const int ROW4_PORT_BIT = 24;
-const int ROW5_PORT_BIT = 25;
-
-const int COL1_PORT_BIT = 4;
-const int COL2_PORT_BIT = 7;
-const int COL3_PORT_BIT = 3;
-const int COL4_PORT_BIT = 6;
-const int COL5_PORT_BIT = 10;
-const int LEDMICRO = 28;
-int led1State = LOW;
-
-// methods
 void Task(void* pvParameters);
 void Task9Scheduler(void* pvParameters);
 void OneShotTimerCallback(TimerHandle_t xTimer);
@@ -56,7 +38,7 @@ typedef struct {
     TaskEDF_t* edf;
 } TaskDeadline_t;
 
-TaskEDF_t Tasks[] = {
+static TaskEDF_t Tasks[] = {
     {
         .name = "Task1",
         .taskHandler = Task,
@@ -96,31 +78,28 @@ TaskEDF_t Tasks[] = {
 const uint8_t N_SCHED_TASKS = sizeof(Tasks) / sizeof(TaskEDF_t);
 const uint8_t N_TASKS = N_SCHED_TASKS + 1;
 
-TaskDeadline_t TaskDeadlines[N_SCHED_TASKS];
-TaskHandle_t TaskHandles[N_TASKS] = {};
+static TaskDeadline_t TaskDeadlines[N_SCHED_TASKS];
+static TaskHandle_t TaskHandles[N_TASKS] = {};
 
 // circular buffer for debugging
 // const size_t BUFF_SIZE = TSTOP * 5;
 const size_t BUFF_SIZE = 10000;
-float t[BUFF_SIZE] = {};
-char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = {};
-unsigned int circ_buffer_counter = 0;
+static float t[BUFF_SIZE] = {};
+static char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = {};
+static unsigned int circ_buffer_counter = 0;
 
 // task handlers
-float systemStartupTime;
-float maxTraceTime = INT32_MIN;
-float accTraceTime = 0;
-float maxSchedTime = INT32_MIN;
-float accSchedTime = 0;
+static float systemStartupTime;
+static float maxTraceTime = INT32_MIN;
+static float accTraceTime = 0;
+static float maxSchedTime = INT32_MIN;
+static float accSchedTime = 0;
 
 // timer handlers
 TimerHandle_t xPeriodicTimer, xOneShotTimer;
 BaseType_t xPeriodicTimerStarted, xOneShotStarted;
 
 void setup() {
-    pinMode(LED1, OUTPUT);
-    pinMode(COL1, OUTPUT);
-    digitalWrite(COL1, LOW);
     Serial.begin(115200);
 
     // create tasks based on Tasks array
@@ -159,24 +138,9 @@ void Task(void* pvParameters) {
     }
 }
 
-/// Returns:
-/// - `-1` if `a < b`
-/// - `1` if `a > b`
-/// - `0` if `a == b`
-int cmpDeadlines(const void* a, const void* b) {
-    const uint8_t arg1 = static_cast<const TaskDeadline_t*>(a)->edf->remaining_deadline;
-    const uint8_t arg2 = static_cast<const TaskDeadline_t*>(b)->edf->remaining_deadline;
-    if (arg1 < arg2) {
-        return -1;
-    } else if (arg1 > arg2) {
-        return 1;
-    }
-    return 0;
-}
-
 /// Prints a message indicating that the provided task has missed its deadline and aborts the program execution.
 /// The function needs the attributes, as if inlined into the only caller (Task9Scheduler), all tasks will start missing their deadlines.
-/// This is probably due to the code taking up space in the code cache, and making other code slower.
+/// This is probably due to taking too much space in the code cache, and making other code slower.
 /// As the CPU utilization is 97%, a small performance penalty can greatly affect the final program.
 ///
 /// You can check that the deadline detection works correctly by increasing the compute_time of a task a lot.
@@ -200,7 +164,7 @@ _Noreturn _NOINLINE_STATIC __attribute__((cold)) void deadlineMissed(TaskEDF_t* 
     for (;;);
 }
 
-_NOINLINE_STATIC void updateTasks() {
+void updateTasks() {
     TickType_t now = xTaskGetTickCount();
 
     for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
@@ -221,7 +185,7 @@ _NOINLINE_STATIC void updateTasks() {
     }
 }
 
-_NOINLINE_STATIC void sortTasks() {
+void sortTasks() {
     for (int i = 1; i < N_SCHED_TASKS; i++) {
         TaskDeadline_t key = TaskDeadlines[i];
         int j = i - 1;
@@ -234,6 +198,12 @@ _NOINLINE_STATIC void sortTasks() {
             j--;
         }
         TaskDeadlines[j + 1] = key;
+    }
+}
+
+void setTaskPriorities() {
+    for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
+        vTaskPrioritySet(TaskDeadlines[i].edf->handle, configMAX_PRIORITIES - 2 - i);
     }
 }
 
@@ -253,9 +223,7 @@ void Task9Scheduler(void* arg) {
         sortTasks();
 
         // assign priorities accordingly
-        for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
-            vTaskPrioritySet(TaskDeadlines[i].edf->handle, configMAX_PRIORITIES - 2 - i);
-        }
+        setTaskPriorities();
 
         float time = str_getTime() - startTime;
         accSchedTime += time;
