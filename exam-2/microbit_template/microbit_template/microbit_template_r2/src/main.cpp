@@ -4,7 +4,7 @@
 #include "task.h"
 #include "timers.h"
 
-#define TSTOP 4000  // Time in milliseconds to stop the kernel
+#define TSTOP 4600  // Time in milliseconds to stop the kernel
 // #define TSTOP 1000  // Time in milliseconds to stop the kernel
 
 const int LED1 = 21;
@@ -23,7 +23,6 @@ const int COL3_PORT_BIT = 3;
 const int COL4_PORT_BIT = 6;
 const int COL5_PORT_BIT = 10;
 const int LEDMICRO = 28;
-
 int led1State = LOW;
 
 // methods
@@ -43,6 +42,7 @@ float str_getTime(void);
 typedef struct {
     const char* name;
     const TaskFunction_t taskCode;
+    const uint8_t compute_time;
     const uint8_t deadline;
     const uint8_t period;
     TickType_t lastActivationTick;
@@ -58,30 +58,35 @@ TaskEDF_t TaskEDF[] = {
     {
         .name = "Task1",
         .taskCode = Task1,
+        .compute_time = 2,
         .deadline = 15,
         .period = 30,
     },
     {
         .name = "Task2",
         .taskCode = Task2,
+        .compute_time = 4,
         .deadline = 20,
         .period = 30,
     },
     {
         .name = "Task3",
         .taskCode = Task3,
+        .compute_time = 10,
         .deadline = 35,
         .period = 40,
     },
     {
         .name = "Task4",
         .taskCode = Task4,
+        .compute_time = 21,
         .deadline = 40,
         .period = 50,
     },
     {
         .name = "Task5",
         .taskCode = Task5,
+        .compute_time = 5,
         .deadline = 50,
         .period = 50,
     },
@@ -119,7 +124,7 @@ void setup()  // put your setup code here, to run once:
 
     for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
         TaskEDF_t* task = &TaskEDF[i];
-        xTaskCreate(task->taskCode, task->name, configMINIMAL_STACK_SIZE, NULL, 1, &TaskHandles[i]);
+        xTaskCreate(task->taskCode, task->name, configMINIMAL_STACK_SIZE, task, 1, &TaskHandles[i]);
         task->handle = TaskHandles[i];
         task->remaining_deadline = task->deadline;
         TaskDeadlines[i] = {.edf = task};
@@ -145,14 +150,14 @@ void loop()  // put your main code here, to run repeatedly:
 /// D = 15 ms
 /// P = 30 ms
 void Task1(void* pvParameters) {
-    (void)pvParameters;
+    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
 
     TickType_t xLastWakeTime = 0;
 
     for (;;) {
-        str_compute(2);
+        str_compute(task->compute_time);
 
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(30));
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
     }
 }
 
@@ -160,14 +165,14 @@ void Task1(void* pvParameters) {
 /// D = 20 ms
 /// P = 30 ms
 void Task2(void* pvParameters) {
-    (void)pvParameters;
+    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
 
     TickType_t xLastWakeTime = 0;
 
     for (;;) {
-        str_compute(4);
+        str_compute(task->compute_time);
 
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(30));
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
     }
 }
 
@@ -175,14 +180,14 @@ void Task2(void* pvParameters) {
 /// D = 35 ms
 /// P = 40 ms
 void Task3(void* pvParameters) {
-    (void)pvParameters;
+    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
 
     TickType_t xLastWakeTime = 0;
 
     for (;;) {
-        str_compute(10);
+        str_compute(task->compute_time);
 
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(40));
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
     }
 }
 
@@ -190,14 +195,14 @@ void Task3(void* pvParameters) {
 /// D = 40 ms
 /// P = 50 ms
 void Task4(void* pvParameters) {
-    (void)pvParameters;
+    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
 
     TickType_t xLastWakeTime = 0;
 
     for (;;) {
-        str_compute(21);
+        str_compute(task->compute_time);
 
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
     }
 }
 
@@ -205,14 +210,14 @@ void Task4(void* pvParameters) {
 /// D = 50 ms
 /// P = 50 ms
 void Task5(void* pvParameters) {
-    (void)pvParameters;
+    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
 
     TickType_t xLastWakeTime = 0;
 
     for (;;) {
-        str_compute(5);
+        str_compute(task->compute_time);
 
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
     }
 }
 
@@ -227,8 +232,32 @@ int cmpDeadlines(const void* a, const void* b) {
     return 0;
 }
 
+/// Prints a message indicating that the provided task has missed its deadline and aborts the program execution.  
+/// The function needs the attributes, as if inlined into the only caller (Task9Scheduler), all tasks will start missing their deadlines.  
+/// This is probably due to the code taking up space in the code cache, and making other code slower.
+/// As the CPU utilization is 97%, a small performance penalty can greatly affect the final program.
+///
+/// You can check that the deadline detection works correctly by increasing the compute_time of a task a lot.
+_Noreturn _NOINLINE __attribute__((cold)) void deadlineMissed(TaskEDF_t* edf, TickType_t now) {
+    str_compute(500);
+    Serial.print(edf->name);
+    Serial.println(" missed deadline");
+    Serial.print("Deadline: ");
+    Serial.println((uint32_t)edf->lastActivationTick + edf->deadline);
+    Serial.print("Now: ");
+    Serial.println((uint32_t)now);
+    Serial.println("###");
+
+    xTimerStop(xOneShotTimer, 0);
+    OneShotTimerCallback(NULL);
+
+    for (;;);
+}
+
 void Task9Scheduler(void* arg) {
     (void)arg;
+
+    systemStartupTime = str_getTime();
 
     for (;;) {
         float startTime = str_getTime();
@@ -237,32 +266,14 @@ void Task9Scheduler(void* arg) {
         
         for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
             TaskEDF_t* edf = TaskDeadlines[i].edf;
-            eTaskState state = eTaskGetState(edf->handle);
             if (now - edf->lastActivationTick >= edf->period) {
                 edf->lastActivationTick = now;
                 edf->remaining_deadline = edf->deadline;
             }
+            eTaskState state = eTaskGetState(edf->handle);
             if (state == eReady || state == eRunning) {
                 if (edf->remaining_deadline > 0) edf->remaining_deadline -= 1;
-                else if (false) {
-                    // Si s'activa la branca es perd el deadline immediatament
-                    // Si es desactiva, podem veure que no és el cas amb el graf
-
-                    str_compute(500);
-                    // deadline missed
-                    Serial.print(edf->name);
-                    Serial.println(" missed deadline");
-                    Serial.print("Deadline: ");
-                    Serial.println((uint32_t)edf->lastActivationTick + edf->deadline);
-                    Serial.print("Now: ");
-                    Serial.println((uint32_t)now);
-                    Serial.println("###");
-
-                    xTimerStop(xOneShotTimer, 0);
-                    OneShotTimerCallback(NULL);
-
-                    for (;;);
-                }
+                else deadlineMissed(edf, now);
             }
         }
 
@@ -281,7 +292,8 @@ void Task9Scheduler(void* arg) {
 }
 
 void vApplicationTickHook(void) {
-    xTaskResumeFromISR(TaskHandles[N_SCHED_TASKS]);
+    BaseType_t yield_required = xTaskResumeFromISR(TaskHandles[N_SCHED_TASKS]);
+    portYIELD_FROM_ISR(yield_required);
 }
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char* pcTaskName) {
