@@ -4,15 +4,17 @@
 #include "task.h"
 #include "timers.h"
 
-// #define TSTOP 4600  // Time in milliseconds to stop the kernel
+// TSTOP => [1000, 7000]
+// If surpassed the trace buffer won't have enough space to save every context change
+#define TSTOP 7000  // Time in milliseconds to stop the kernel
 // #define TSTOP 1000  // Time in milliseconds to stop the kernel
-#define TSTOP 7000
+
+// Change to 1 if you want to create the graph with matlab instead of `graph.py`
+#define MATLAB 0
 
 void Task(void* pvParameters);
 void Task9Scheduler(void* pvParameters);
 void OneShotTimerCallback(TimerHandle_t xTimer);
-
-_NOINLINE_STATIC void sortTasks(void);
 
 void str_compute(unsigned long milliseconds);
 void str_trace(void);
@@ -30,13 +32,14 @@ typedef struct {
     const uint8_t deadline;
     /// Time between executions of the task.
     const uint8_t period;
-    ///
+    /// When the task was last activated.
+    /// Should be used with 
     TickType_t lastWakeTime;
     uint8_t remaining_deadline;
     TaskHandle_t handle;
 } TaskEDF_t;
 
-typedef struct TaskDeadline_t {
+typedef struct {
     TaskEDF_t* edf;
 } TaskDeadline_t;
 
@@ -83,20 +86,24 @@ const uint8_t N_TASKS = N_SCHED_TASKS + 1;
 static TaskDeadline_t TaskDeadlines[N_SCHED_TASKS];
 static TaskHandle_t TaskHandles[N_TASKS] = {};
 
-// circular buffer for debugging
-const size_t BUFF_SIZE = ((float)TSTOP * 2.14);
-static uint16_t t[BUFF_SIZE] = {};
-static char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = {};
-static unsigned int circ_buffer_counter = 0;
 
-// task handlers
+const size_t BUFF_SIZE = ((float)TSTOP * 2.14);
+// Time changed from `float` to `u16`, so `TSTOP` can be increased from 5500 to 7000.
+// If you want to see the "real" time, you can change the type back to `float`.
+// Remember to adjust `TSTOP` afterwards
+static uint16_t t[BUFF_SIZE] = {};
+// Circular buffer for debugging
+static char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = {};
+static size_t circ_buffer_counter = 0;
+
+// Task handlers
 static float systemStartupTime;
 static float maxTraceTime = INT32_MIN;
 static float accTraceTime = 0;
 static float maxSchedTime = INT32_MIN;
 static float accSchedTime = 0;
 
-// timer handlers
+// Timer handlers
 TimerHandle_t xPeriodicTimer, xOneShotTimer;
 BaseType_t xPeriodicTimerStarted, xOneShotStarted;
 
@@ -126,7 +133,7 @@ void loop() {}
 
 void Task(void* pvParameters) {
     // get task parameters
-    TaskEDF_t* task = static_cast<TaskEDF_t*>(pvParameters);
+    TaskEDF_t *const task = static_cast<TaskEDF_t* const>(pvParameters);
 
     for (;;) {
         // waste time
@@ -163,22 +170,6 @@ _Noreturn _NOINLINE_STATIC __attribute__((cold)) void deadlineMissed(TaskEDF_t* 
     for (;;);
 }
 
-_NOINLINE_STATIC void sortTasks() {
-    for (int i = 1; i < N_SCHED_TASKS; i++) {
-        TaskDeadline_t key = TaskDeadlines[i];
-        int j = i - 1;
-
-        uint8_t key_remaining = key.edf->remaining_deadline;
-
-        // move elements that are greater than `key.remaining_deadline` one position ahead
-        while (j >= 0 && TaskDeadlines[j].edf->remaining_deadline > key_remaining) {
-            TaskDeadlines[j + 1] = TaskDeadlines[j];
-            j--;
-        }
-        TaskDeadlines[j + 1] = key;
-    }
-}
-
 void updateTasks() {
     TickType_t now = xTaskGetTickCount();
 
@@ -195,21 +186,23 @@ void updateTasks() {
         // if task period should begin, reactivate task
         if (now - edf->lastWakeTime >= edf->period) {
             edf->remaining_deadline = edf->deadline;
-            
-            // Task deadline has changed, set position in the task array accordingly and update priorities
-            uint8_t key_remaining = edf->remaining_deadline;
-            uint8_t j;
-            for (j = i; j < N_SCHED_TASKS - 1; j++) {
-                if (key_remaining < TaskDeadlines[j+1].edf->remaining_deadline) {
-                    break;
-                }
-                TaskDeadline_t tmp = TaskDeadlines[j];
-                TaskDeadlines[j] = TaskDeadlines[j+1];
-                TaskDeadlines[j+1] = tmp;
-                vTaskPrioritySet(TaskDeadlines[j].edf->handle, configMAX_PRIORITIES - 2 - j);
-            }
-            vTaskPrioritySet(edf->handle, configMAX_PRIORITIES - 2 - j);
         }
+    }
+}
+
+void sortTasks() {
+    for (int i = 1; i < N_SCHED_TASKS; i++) {
+        TaskDeadline_t key = TaskDeadlines[i];
+        int j = i - 1;
+
+        uint8_t key_remaining = key.edf->remaining_deadline;
+
+        // move elements that are greater than `key.remaining_deadline` one position ahead
+        while (j >= 0 && TaskDeadlines[j].edf->remaining_deadline > key_remaining) {
+            TaskDeadlines[j + 1] = TaskDeadlines[j];
+            j--;
+        }
+        TaskDeadlines[j + 1] = key;
     }
 }
 
@@ -223,14 +216,19 @@ void Task9Scheduler(void* arg) {
     (void)arg;
 
     systemStartupTime = str_getTime();
-    sortTasks();
-    setTaskPriorities();
 
     for (;;) {
         float startTime = str_getTime();
 
-        // update task remaining deadlines, check for missed ones and set priorities
+        // update task remaining deadlines and check for missed ones
         updateTasks();
+
+        // sort tasks by remaining deadline
+        // must be in a separate function, if not, tasks will miss deadline
+        sortTasks();
+
+        // assign priorities accordingly
+        setTaskPriorities();
 
         float time = str_getTime() - startTime;
         accSchedTime += time;
@@ -271,22 +269,27 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
         }
         Serial.println();
     }
-    Serial.println("---");
-    Serial.print("Samples: ");
-    Serial.println(i);
 
-    Serial.print("System Startup Time: ");
-    Serial.println(systemStartupTime);
-
-    Serial.print("Max Trace Time: ");
-    Serial.println(maxTraceTime, 10);
-    Serial.print("Acc Trace Time: ");
-    Serial.println(accTraceTime, 2);
-
-    Serial.print("Max Sched Time: ");
-    Serial.println(maxSchedTime, 10);
-    Serial.print("Acc Sched Time: ");
-    Serial.println(accSchedTime, 2);
+    #if !MATLAB
+    {
+        Serial.println("---");
+        Serial.print("Samples: ");
+        Serial.println(i);
+    
+        Serial.print("System Startup Time: ");
+        Serial.println(systemStartupTime);
+    
+        Serial.print("Max Trace Time: ");
+        Serial.println(maxTraceTime, 10);
+        Serial.print("Acc Trace Time: ");
+        Serial.println(accTraceTime, 2);
+    
+        Serial.print("Max Sched Time: ");
+        Serial.println(maxSchedTime, 10);
+        Serial.print("Acc Sched Time: ");
+        Serial.println(accSchedTime, 2);
+    }
+    #endif
 
     for (;;);
 }
@@ -333,7 +336,12 @@ void str_trace(void) {
 
     t[circ_buffer_counter] = str_getTime();  // sent time in milliseconds
     for (int i = 0; i < N_SCHED_TASKS; i++) {
-        circ_buffers[i][circ_buffer_counter] = '0' + eTaskGetState(TaskHandles[i]);
+        #if MATLAB
+        const char offset = 0;
+        #else
+        const char offset = '0';
+        #endif
+        circ_buffers[i][circ_buffer_counter] = eTaskGetState(TaskHandles[i]) + offset;
     }
 
     // workaround to get Scheduler Task in the graph to work properly

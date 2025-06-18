@@ -4,10 +4,13 @@
 #include "task.h"
 #include "timers.h"
 
-// TSTOP => [1000, 5500]
+// TSTOP => [1000, 7000]
 // If surpassed the trace buffer won't have enough space to save every context change
-#define TSTOP 5500  // Time in milliseconds to stop the kernel
 // #define TSTOP 1000  // Time in milliseconds to stop the kernel
+#define TSTOP 7000  // Time in milliseconds to stop the kernel
+
+// Change to 1 if you want to create the graph with matlab instead of `graph.py`
+#define MATLAB 0
 
 void Task(void* pvParameters);
 void Task9Scheduler(void* pvParameters);
@@ -83,20 +86,24 @@ const uint8_t N_TASKS = N_SCHED_TASKS + 1;
 static TaskDeadline_t TaskDeadlines[N_SCHED_TASKS];
 static TaskHandle_t TaskHandles[N_TASKS] = {};
 
-// circular buffer for debugging
+
 const size_t BUFF_SIZE = ((float)TSTOP * 2.14);
-static float t[BUFF_SIZE] = {};
+// Time changed from `float` to `u16`, so `TSTOP` can be increased from 5500 to 7000.
+// If you want to see the "real" time, you can change the type back to `float`.
+// Remember to adjust `TSTOP` afterwards
+static uint16_t t[BUFF_SIZE] = {};
+// Circular buffer for debugging
 static char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = {};
 static size_t circ_buffer_counter = 0;
 
-// task handlers
+// Task handlers
 static float systemStartupTime;
 static float maxTraceTime = INT32_MIN;
 static float accTraceTime = 0;
 static float maxSchedTime = INT32_MIN;
 static float accSchedTime = 0;
 
-// timer handlers
+// Timer handlers
 TimerHandle_t xPeriodicTimer, xOneShotTimer;
 BaseType_t xPeriodicTimerStarted, xOneShotStarted;
 
@@ -251,8 +258,8 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
 
     //...and sent data to the host PC
     size_t i;
-    for (i = 2; i < BUFF_SIZE; i++) {
-        if (t[i] == 0) break;
+    for (i = 3; i < BUFF_SIZE; i++) {
+        if (i > 5 && t[i] == 0) break;
 
         Serial.println("DAT");
         Serial.print((float)t[i]);
@@ -262,22 +269,27 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
         }
         Serial.println();
     }
-    Serial.println("---");
-    Serial.print("Samples: ");
-    Serial.println(i);
 
-    Serial.print("System Startup Time: ");
-    Serial.println(systemStartupTime);
-
-    Serial.print("Max Trace Time: ");
-    Serial.println(maxTraceTime, 10);
-    Serial.print("Acc Trace Time: ");
-    Serial.println(accTraceTime, 2);
-
-    Serial.print("Max Sched Time: ");
-    Serial.println(maxSchedTime, 10);
-    Serial.print("Acc Sched Time: ");
-    Serial.println(accSchedTime, 2);
+    #if !MATLAB
+    {
+        Serial.println("---");
+        Serial.print("Samples: ");
+        Serial.println(i);
+    
+        Serial.print("System Startup Time: ");
+        Serial.println(systemStartupTime);
+    
+        Serial.print("Max Trace Time: ");
+        Serial.println(maxTraceTime, 10);
+        Serial.print("Acc Trace Time: ");
+        Serial.println(accTraceTime, 2);
+    
+        Serial.print("Max Sched Time: ");
+        Serial.println(maxSchedTime, 10);
+        Serial.print("Acc Sched Time: ");
+        Serial.println(accSchedTime, 2);
+    }
+    #endif
 
     for (;;);
 }
@@ -324,7 +336,12 @@ void str_trace(void) {
 
     t[circ_buffer_counter] = str_getTime();  // sent time in milliseconds
     for (int i = 0; i < N_SCHED_TASKS; i++) {
-        circ_buffers[i][circ_buffer_counter] = '0' + eTaskGetState(TaskHandles[i]);
+        #if MATLAB
+        const char offset = 0;
+        #else
+        const char offset = '0';
+        #endif
+        circ_buffers[i][circ_buffer_counter] = eTaskGetState(TaskHandles[i]) + offset;
     }
 
     // workaround to get Scheduler Task in the graph to work properly
