@@ -4,8 +4,8 @@
 #include "task.h"
 #include "timers.h"
 
-// #define TSTOP 50000  // Time in milliseconds to stop the kernel
-#define TSTOP 1000  // Time in milliseconds to stop the kernel
+#define TSTOP 4000  // Time in milliseconds to stop the kernel
+// #define TSTOP 1000  // Time in milliseconds to stop the kernel
 
 const int LED1 = 21;
 const int COL1 = 4;
@@ -93,9 +93,10 @@ TaskDeadline_t TaskDeadlines[N_SCHED_TASKS] = {};
 TaskHandle_t TaskHandles[N_TASKS] = {};
 
 // circular buffer for debugging
-const size_t BUFF_SIZE = TSTOP * 5;
+// const size_t BUFF_SIZE = TSTOP * 5;
+const size_t BUFF_SIZE = 10000;
 float t[BUFF_SIZE] = {};
-char circ_buffers[N_TASKS][BUFF_SIZE] = {};
+char circ_buffers[N_SCHED_TASKS][BUFF_SIZE] = {};
 unsigned int circ_buffer_counter = 0;
 
 // task handlers
@@ -302,7 +303,7 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
 
         Serial.println("DAT");
         Serial.print((float)t[i]);
-        for (uint8_t t = 0; t < N_TASKS; t++) {
+        for (uint8_t t = 0; t < N_SCHED_TASKS; t++) {
             Serial.print(",");
             Serial.write(circ_buffers[t][i]);
         }
@@ -373,8 +374,8 @@ void str_trace(void) {
         circ_buffers[i][circ_buffer_counter] = '0' + eTaskGetState(TaskHandles[i]);
     }
 
-    // workaround to get graph to work properly
-    circ_buffers[N_SCHED_TASKS][circ_buffer_counter] = eTaskGetState(TaskHandles[N_SCHED_TASKS]) == eSuspended ? '2' : '0';
+    // workaround to get Scheduler Task in the graph to work properly
+    // circ_buffers[N_SCHED_TASKS][circ_buffer_counter] = eTaskGetState(TaskHandles[N_SCHED_TASKS]) == eSuspended ? '2' : '0';
 
     float time = str_getTime() - startTime;
     accTraceTime += time;
