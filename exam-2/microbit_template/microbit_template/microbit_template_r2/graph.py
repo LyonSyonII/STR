@@ -67,7 +67,7 @@ def compute_task_metrics(state_df, time_col, task_col):
     return compute_time, period_observed
 
 
-def plot_task_states(df, time_col='time'):
+def plot_task_states(df: pd.DataFrame, time_col='time'):
     task_cols = [col for col in df.columns if col != time_col]
     if not task_cols:
         print(f"No task columns found after excluding '{time_col}'", file=sys.stderr)
@@ -114,7 +114,7 @@ def plot_task_states(df, time_col='time'):
             ax.text(0.02, 0.85, info, transform=ax.transAxes, fontsize=9,
                     bbox=dict(boxstyle="round", facecolor="white", alpha=0.5))
 
-    axes[-1].set_xlabel(f"{time_col.capitalize()} (ms)")
+    axes[-1].set_xlabel(f"{time_col.capitalize()} (ms)") # type: ignore
     fig.suptitle('Task State Over Time with Deadlines, Compute & Observed Period')
     plt.tight_layout(rect=[0, 0.03, 1, 0.97])
     plt.show()
@@ -140,8 +140,13 @@ def main():
             data_start = 0
         try:
             data_end = raw_data.index("---", data_start)
+            print(data_end)
+            print(raw_data[data_end+2])
+            system_startup_time = float(raw_data[data_end+2].replace("System Startup Time: ", ""))
         except:
             data_end = -1
+            system_startup_time = 0
+            
         raw_data = raw_data[data_start:data_end]
 
         sample_row = raw_data[0].split(',')

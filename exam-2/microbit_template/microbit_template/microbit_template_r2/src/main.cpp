@@ -26,11 +26,7 @@ const int LEDMICRO = 28;
 int led1State = LOW;
 
 // methods
-void Task1(void* pvParameters);
-void Task2(void* pvParameters);
-void Task3(void* pvParameters);
-void Task4(void* pvParameters);
-void Task5(void* pvParameters);
+void Task(void* pvParameters);
 void Task9Scheduler(void* pvParameters);
 void OneShotTimerCallback(TimerHandle_t xTimer);
 
@@ -38,13 +34,19 @@ void str_compute(unsigned long milliseconds);
 void str_trace(void);
 float str_getTime(void);
 
-// edf
+/// EDF task descriptor.
 typedef struct {
-    const char* name;
-    const TaskFunction_t taskCode;
+    /// Name of the task.
+    const char* const name;
+    /// Function that contains the code of the task.
+    const TaskFunction_t taskHandler;
+    /// Maximum time the task will take to complete.
     const uint8_t compute_time;
+    /// Maximum time the task should take to complete.
     const uint8_t deadline;
+    /// Time between executions of the task.
     const uint8_t period;
+    ///
     TickType_t lastActivationTick;
     uint8_t remaining_deadline;
     TaskHandle_t handle;
@@ -54,47 +56,47 @@ typedef struct {
     TaskEDF_t* edf;
 } TaskDeadline_t;
 
-TaskEDF_t TaskEDF[] = {
+TaskEDF_t Tasks[] = {
     {
         .name = "Task1",
-        .taskCode = Task1,
+        .taskHandler = Task,
         .compute_time = 2,
         .deadline = 15,
         .period = 30,
     },
     {
         .name = "Task2",
-        .taskCode = Task2,
+        .taskHandler = Task,
         .compute_time = 4,
         .deadline = 20,
         .period = 30,
     },
     {
         .name = "Task3",
-        .taskCode = Task3,
+        .taskHandler = Task,
         .compute_time = 10,
         .deadline = 35,
         .period = 40,
     },
     {
         .name = "Task4",
-        .taskCode = Task4,
+        .taskHandler = Task,
         .compute_time = 21,
         .deadline = 40,
         .period = 50,
     },
     {
         .name = "Task5",
-        .taskCode = Task5,
+        .taskHandler = Task,
         .compute_time = 5,
         .deadline = 50,
         .period = 50,
     },
 };
-const uint8_t N_SCHED_TASKS = sizeof(TaskEDF) / sizeof(TaskEDF_t);
+const uint8_t N_SCHED_TASKS = sizeof(Tasks) / sizeof(TaskEDF_t);
 const uint8_t N_TASKS = N_SCHED_TASKS + 1;
 
-TaskDeadline_t TaskDeadlines[N_SCHED_TASKS] = {};
+TaskDeadline_t TaskDeadlines[N_SCHED_TASKS];
 TaskHandle_t TaskHandles[N_TASKS] = {};
 
 // circular buffer for debugging
@@ -115,115 +117,55 @@ float accSchedTime = 0;
 TimerHandle_t xPeriodicTimer, xOneShotTimer;
 BaseType_t xPeriodicTimerStarted, xOneShotStarted;
 
-void setup()  // put your setup code here, to run once:
-{
+void setup() {
     pinMode(LED1, OUTPUT);
     pinMode(COL1, OUTPUT);
     digitalWrite(COL1, LOW);
     Serial.begin(115200);
 
+    // create tasks based on Tasks array
     for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
-        TaskEDF_t* task = &TaskEDF[i];
-        xTaskCreate(task->taskCode, task->name, configMINIMAL_STACK_SIZE, task, 1, &TaskHandles[i]);
+        TaskEDF_t* task = &Tasks[i];
+        xTaskCreate(task->taskHandler, task->name, configMINIMAL_STACK_SIZE, task, 1, &TaskHandles[i]);
         task->handle = TaskHandles[i];
         task->remaining_deadline = task->deadline;
         TaskDeadlines[i] = {.edf = task};
     }
+    // create scheduler task
     xTaskCreate(Task9Scheduler, "Task9", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1, &TaskHandles[N_SCHED_TASKS]);
 
+    // create and start timer to stop program execution
     xOneShotTimer = xTimerCreate("OneShotTimer", pdMS_TO_TICKS(TSTOP), pdFALSE, 0, OneShotTimerCallback);
     xOneShotStarted = xTimerStart(xOneShotTimer, 0);
 
+    // start running
     vTaskStartScheduler();
 }
 
-void loop()  // put your main code here, to run repeatedly:
-{
-    // led1State ^= 1;
-    // digitalWrite(LED1,led1State);
-    // Serial.print("t=");
-    // Serial.println(millis());
-    // delay(500);
-}
+void loop() {}
 
-/// C = 2 ms
-/// D = 15 ms
-/// P = 30 ms
-void Task1(void* pvParameters) {
-    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
+void Task(void* pvParameters) {
+    // get task parameters
+    const TaskEDF_t* const task = static_cast<const TaskEDF_t* const>(pvParameters);
 
     TickType_t xLastWakeTime = 0;
 
     for (;;) {
+        // waste time
         str_compute(task->compute_time);
 
+        // wait until start of next period
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
     }
 }
 
-/// C = 4 ms
-/// D = 20 ms
-/// P = 30 ms
-void Task2(void* pvParameters) {
-    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
-
-    TickType_t xLastWakeTime = 0;
-
-    for (;;) {
-        str_compute(task->compute_time);
-
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
-    }
-}
-
-/// C = 10 ms
-/// D = 35 ms
-/// P = 40 ms
-void Task3(void* pvParameters) {
-    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
-
-    TickType_t xLastWakeTime = 0;
-
-    for (;;) {
-        str_compute(task->compute_time);
-
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
-    }
-}
-
-/// C = 21 ms
-/// D = 40 ms
-/// P = 50 ms
-void Task4(void* pvParameters) {
-    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
-
-    TickType_t xLastWakeTime = 0;
-
-    for (;;) {
-        str_compute(task->compute_time);
-
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
-    }
-}
-
-/// C = 5 ms
-/// D = 50 ms
-/// P = 50 ms
-void Task5(void* pvParameters) {
-    TaskEDF_t* task = (TaskEDF_t*)pvParameters;
-
-    TickType_t xLastWakeTime = 0;
-
-    for (;;) {
-        str_compute(task->compute_time);
-
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
-    }
-}
-
+/// Returns:
+/// - `-1` if `a < b`
+/// - `1` if `a > b`
+/// - `0` if `a == b`
 int cmpDeadlines(const void* a, const void* b) {
-    const auto arg1 = static_cast<const TaskDeadline_t*>(a)->edf->remaining_deadline;
-    const auto arg2 = static_cast<const TaskDeadline_t*>(b)->edf->remaining_deadline;
+    const uint8_t arg1 = static_cast<const TaskDeadline_t*>(a)->edf->remaining_deadline;
+    const uint8_t arg2 = static_cast<const TaskDeadline_t*>(b)->edf->remaining_deadline;
     if (arg1 < arg2) {
         return -1;
     } else if (arg1 > arg2) {
@@ -232,14 +174,17 @@ int cmpDeadlines(const void* a, const void* b) {
     return 0;
 }
 
-/// Prints a message indicating that the provided task has missed its deadline and aborts the program execution.  
-/// The function needs the attributes, as if inlined into the only caller (Task9Scheduler), all tasks will start missing their deadlines.  
+/// Prints a message indicating that the provided task has missed its deadline and aborts the program execution.
+/// The function needs the attributes, as if inlined into the only caller (Task9Scheduler), all tasks will start missing their deadlines.
 /// This is probably due to the code taking up space in the code cache, and making other code slower.
 /// As the CPU utilization is 97%, a small performance penalty can greatly affect the final program.
 ///
 /// You can check that the deadline detection works correctly by increasing the compute_time of a task a lot.
-_Noreturn _NOINLINE __attribute__((cold)) void deadlineMissed(TaskEDF_t* edf, TickType_t now) {
+_Noreturn _NOINLINE_STATIC __attribute__((cold)) void deadlineMissed(TaskEDF_t* edf, TickType_t now) {
+    // wait a bit for Serial to initialize if it hasn't
     str_compute(500);
+
+    // print task info
     Serial.print(edf->name);
     Serial.println(" missed deadline");
     Serial.print("Deadline: ");
@@ -248,10 +193,48 @@ _Noreturn _NOINLINE __attribute__((cold)) void deadlineMissed(TaskEDF_t* edf, Ti
     Serial.println((uint32_t)now);
     Serial.println("###");
 
+    // stop the timer and abort the system
     xTimerStop(xOneShotTimer, 0);
     OneShotTimerCallback(NULL);
 
     for (;;);
+}
+
+_NOINLINE_STATIC void updateTasks() {
+    TickType_t now = xTaskGetTickCount();
+
+    for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
+        TaskEDF_t* edf = TaskDeadlines[i].edf;
+        // update remaining deadline of all tasks
+        eTaskState state = eTaskGetState(edf->handle);
+        if (state == eReady || state == eRunning) {
+            if (edf->remaining_deadline > 0)
+                edf->remaining_deadline -= 1;
+            else
+                deadlineMissed(edf, now);
+        }
+        // if task period should begin, reactivate task
+        if (now - edf->lastActivationTick >= edf->period) {
+            edf->lastActivationTick = now;
+            edf->remaining_deadline = edf->deadline;
+        }
+    }
+}
+
+_NOINLINE_STATIC void sortTasks() {
+    for (int i = 1; i < N_SCHED_TASKS; i++) {
+        TaskDeadline_t key = TaskDeadlines[i];
+        int j = i - 1;
+
+        uint8_t key_remaining = key.edf->remaining_deadline;
+
+        // move elements that are greater than `key.remaining_deadline` one position ahead
+        while (j >= 0 && TaskDeadlines[j].edf->remaining_deadline > key_remaining) {
+            TaskDeadlines[j + 1] = TaskDeadlines[j];
+            j--;
+        }
+        TaskDeadlines[j + 1] = key;
+    }
 }
 
 void Task9Scheduler(void* arg) {
@@ -262,23 +245,14 @@ void Task9Scheduler(void* arg) {
     for (;;) {
         float startTime = str_getTime();
 
-        TickType_t now = xTaskGetTickCount();
-        
-        for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
-            TaskEDF_t* edf = TaskDeadlines[i].edf;
-            if (now - edf->lastActivationTick >= edf->period) {
-                edf->lastActivationTick = now;
-                edf->remaining_deadline = edf->deadline;
-            }
-            eTaskState state = eTaskGetState(edf->handle);
-            if (state == eReady || state == eRunning) {
-                if (edf->remaining_deadline > 0) edf->remaining_deadline -= 1;
-                else deadlineMissed(edf, now);
-            }
-        }
+        // update task remaining deadlines and check for missed ones
+        updateTasks();
 
-        std::qsort(TaskDeadlines, N_SCHED_TASKS, sizeof(TaskDeadline_t), cmpDeadlines);
-        
+        // sort tasks by remaining deadline
+        // must be in a separate function, if not, tasks will miss deadline
+        sortTasks();
+
+        // assign priorities accordingly
         for (uint8_t i = 0; i < N_SCHED_TASKS; i++) {
             vTaskPrioritySet(TaskDeadlines[i].edf->handle, configMAX_PRIORITIES - 2 - i);
         }
@@ -292,6 +266,7 @@ void Task9Scheduler(void* arg) {
 }
 
 void vApplicationTickHook(void) {
+    // resume scheduler and yield immediately
     BaseType_t yield_required = xTaskResumeFromISR(TaskHandles[N_SCHED_TASKS]);
     portYIELD_FROM_ISR(yield_required);
 }
@@ -309,7 +284,7 @@ void OneShotTimerCallback(TimerHandle_t xTimer) {
     vPortEndScheduler();
 
     //...and sent data to the host PC
-    unsigned int i;
+    size_t i;
     for (i = 2; i < BUFF_SIZE; i++) {
         if (t[i] == 0) break;
 
