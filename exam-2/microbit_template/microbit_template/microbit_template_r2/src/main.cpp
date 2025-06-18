@@ -4,9 +4,8 @@
 #include "task.h"
 #include "timers.h"
 
-// #define TSTOP 4600  // Time in milliseconds to stop the kernel
+#define TSTOP 4600  // Time in milliseconds to stop the kernel
 // #define TSTOP 1000  // Time in milliseconds to stop the kernel
-#define TSTOP 1000
 
 void Task(void* pvParameters);
 void Task9Scheduler(void* pvParameters);
@@ -28,8 +27,9 @@ typedef struct {
     const uint8_t deadline;
     /// Time between executions of the task.
     const uint8_t period;
-    ///
-    TickType_t lastActivationTick;
+    /// When the task was last activated.
+    /// Should be used with 
+    TickType_t lastWakeTime;
     uint8_t remaining_deadline;
     TaskHandle_t handle;
 } TaskEDF_t;
@@ -125,16 +125,14 @@ void loop() {}
 
 void Task(void* pvParameters) {
     // get task parameters
-    const TaskEDF_t* const task = static_cast<const TaskEDF_t* const>(pvParameters);
-
-    TickType_t xLastWakeTime = 0;
+    TaskEDF_t *const task = static_cast<TaskEDF_t* const>(pvParameters);
 
     for (;;) {
         // waste time
         str_compute(task->compute_time);
 
         // wait until start of next period
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(task->period));
+        vTaskDelayUntil(&task->lastWakeTime, pdMS_TO_TICKS(task->period));
     }
 }
 
@@ -152,7 +150,7 @@ _Noreturn _NOINLINE_STATIC __attribute__((cold)) void deadlineMissed(TaskEDF_t* 
     Serial.print(edf->name);
     Serial.println(" missed deadline");
     Serial.print("Deadline: ");
-    Serial.println((uint32_t)edf->lastActivationTick + edf->deadline);
+    Serial.println((uint32_t)edf->lastWakeTime + edf->deadline);
     Serial.print("Now: ");
     Serial.println((uint32_t)now);
     Serial.println("###");
@@ -178,8 +176,7 @@ void updateTasks() {
                 deadlineMissed(edf, now);
         }
         // if task period should begin, reactivate task
-        if (now - edf->lastActivationTick >= edf->period) {
-            edf->lastActivationTick = now;
+        if (now - edf->lastWakeTime >= edf->period) {
             edf->remaining_deadline = edf->deadline;
         }
     }
